@@ -31,3 +31,8 @@ Apache License 2.0 (see `LICENSE`).
 
 Releases are identified using git tags (see `VERSIONING.md`).  
 Current baseline tag: `v1.0`.
+
+## Project checkpoints
+
+- Release notes: `CHANGELOG.md`
+- Roadmap: `ROADMAP.md`
