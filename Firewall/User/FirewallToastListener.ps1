@@ -55,3 +55,64 @@ Register-ObjectEvent $watcher EventRecordWritten -Action {
 $watcher.Enabled = $true
 Write-Host "[LISTENER] Waiting for FirewallCore events..."
 Wait-Event
+
+# --- BEGIN FIREWALLCORE HEARTBEAT ---
+# Heartbeat so SYSTEM watchdog can verify we're not hung.
+try {
+    $StateDir = Join-Path $env:ProgramData "FirewallCore\State"
+    if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
+    $script:HeartbeatPath = Join-Path $StateDir "toastlistener.heartbeat"
+
+    function Update-FirewallCoreHeartbeat {
+        try {
+            # Touch the file (LastWriteTimeUtc used by watchdog)
+            Set-Content -LiteralPath $script:HeartbeatPath -Value ([DateTime]::UtcNow.ToString("o")) -Encoding ASCII -Force
+        } catch {}
+    }
+
+    # Timer updates heartbeat every 15 seconds, independent of listener loop/event waits.
+    $script:hbTimer = New-Object System.Timers.Timer
+    $script:hbTimer.Interval = 15000
+    $script:hbTimer.AutoReset = $true
+    Register-ObjectEvent -InputObject $script:hbTimer -EventName Elapsed -SourceIdentifier "FirewallCore.ToastHeartbeat" -Action { 
+        try { Update-FirewallCoreHeartbeat } catch {}
+    } | Out-Null
+    $script:hbTimer.Start() | Out-Null
+
+    # Also update immediately on startup
+    Update-FirewallCoreHeartbeat
+} catch {
+    # Never fail listener because of heartbeat
+}
+# --- END FIREWALLCORE HEARTBEAT ---
+
+# --- BEGIN FIREWALLCORE HEARTBEAT ---
+# Heartbeat so SYSTEM watchdog can verify we're not hung.
+try {
+    $StateDir = Join-Path $env:ProgramData "FirewallCore\State"
+    if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
+    $script:HeartbeatPath = Join-Path $StateDir "toastlistener.heartbeat"
+
+    function Update-FirewallCoreHeartbeat {
+        try {
+            # Touch the file (LastWriteTimeUtc used by watchdog)
+            Set-Content -LiteralPath $script:HeartbeatPath -Value ([DateTime]::UtcNow.ToString("o")) -Encoding ASCII -Force
+        } catch {}
+    }
+
+    # Timer updates heartbeat every 15 seconds, independent of listener loop/event waits.
+    $script:hbTimer = New-Object System.Timers.Timer
+    $script:hbTimer.Interval = 15000
+    $script:hbTimer.AutoReset = $true
+    Register-ObjectEvent -InputObject $script:hbTimer -EventName Elapsed -SourceIdentifier "FirewallCore.ToastHeartbeat" -Action { 
+        try { Update-FirewallCoreHeartbeat } catch {}
+    } | Out-Null
+    $script:hbTimer.Start() | Out-Null
+
+    # Also update immediately on startup
+    Update-FirewallCoreHeartbeat
+} catch {
+    # Never fail listener because of heartbeat
+}
+# --- END FIREWALLCORE HEARTBEAT ---
+
