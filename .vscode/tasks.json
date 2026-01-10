@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HIPS: DEV-Only Tests (Test-*.ps1)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        "$suite = Join-Path '${workspaceFolder}' 'Firewall\\DEV-Only\\Tests'; if(!(Test-Path $suite)){ throw \"Missing suite folder: $suite\" }; $tests = Get-ChildItem $suite -Filter 'Test-*.ps1' | Sort-Object Name; if(!$tests){ throw \"No Test-*.ps1 found in $suite\" }; $fails=@(); foreach($t in $tests){ Write-Host \"`n>>> RUNNING $($t.Name)\"; try { & $t.FullName; Write-Host \"[PASS] $($t.Name)\" -ForegroundColor Green } catch { Write-Host \"[FAIL] $($t.Name)\" -ForegroundColor Red; Write-Host $_.Exception.Message; $fails += $t.Name } }; if($fails.Count){ throw (\"Failures: \" + ($fails -join ', ')) }"
+      ],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "HIPS: FORCED (Forced-*.ps1)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        "$suite = Join-Path '${workspaceFolder}' 'Firewall\\DEV-Only\\Forced'; if(!(Test-Path $suite)){ throw \"Missing suite folder: $suite\" }; $tests = Get-ChildItem $suite -Filter 'Forced-*.ps1' | Sort-Object Name; if(!$tests){ throw \"No Forced-*.ps1 found in $suite\" }; foreach($t in $tests){ Write-Host \"`n>>> RUNNING $($t.Name)\"; & $t.FullName }"
+      ],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "HIPS: PENTEST (all *.ps1)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        "$suite = Join-Path '${workspaceFolder}' 'Firewall\\DEV-Only\\Pentest'; if(!(Test-Path $suite)){ throw \"Missing suite folder: $suite\" }; $tests = Get-ChildItem $suite -Filter '*.ps1' | Sort-Object Name; if(!$tests){ throw \"No *.ps1 found in $suite\" }; foreach($t in $tests){ Write-Host \"`n>>> RUNNING $($t.Name)\"; & $t.FullName }"
+      ],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "HIPS: Run ALL (Tests + Forced + Pentest)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "HIPS: DEV-Only Tests (Test-*.ps1)",
+        "HIPS: FORCED (Forced-*.ps1)",
+        "HIPS: PENTEST (all *.ps1)"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
