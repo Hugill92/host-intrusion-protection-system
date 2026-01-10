@@ -26,3 +26,8 @@ Future versions may offer optional paid convenience packages (installer bundles)
 ## License
 
 Apache License 2.0 (see `LICENSE`).
+
+## Versioning
+
+Releases are identified using git tags (see `VERSIONING.md`).  
+Current baseline tag: `v1.0`.
