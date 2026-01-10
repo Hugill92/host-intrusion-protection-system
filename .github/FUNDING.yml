@@ -2,6 +2,6 @@
 # Use a URL (not just an email). Recommended: create a PayPal Donation Page link
 # and paste it below. This avoids exposing your email publicly.
 custom: [
-  "https://www.paypal.com/donate/?business=G4BWBBBB22VR6&no_recurring=0&item_name=Any+donations+will+go+into+developing+further+version+of+the+Host+Intrusion+Protection+System.+Never+Feel+Obligated.&currency_code=USD"
+  "https://www.paypal.com/donate/?business=G4BWBBBB22VR6&no_recurring=0&currency_code=USD"
   
 ]
