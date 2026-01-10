@@ -1,0 +1,6 @@
+﻿# GitHub sponsor button configuration
+# Use a URL (not just an email). Recommended: create a PayPal Donation Page link
+# and paste it below. This avoids exposing your email publicly.
+custom: [
+  "PASTE_YOUR_PAYPAL_DONATION_LINK_HERE"
+]

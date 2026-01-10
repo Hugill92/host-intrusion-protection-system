@@ -1,0 +1,77 @@
+# ===== Runtime / generated artifacts (do not commit) =====
+# Logs / traces / dumps
+*.log
+*.evtx
+*.etl
+*.dmp
+*.tmp
+*transcript*
+test-results_*.json
+
+# Backup files
+*.bak
+*.bak_*
+*.old
+
+# Packaging artifacts
+*.zip
+*.msi
+
+# Per-machine runtime state
+Firewall/State/
+Firewall/Snapshots/
+Firewall/Logs/
+Firewall/DEV-Only/State/
+Firewall/Live/Baseline/firewall-baseline.json
+
+# Misc state markers
+*.flag
+*.count
+
+# ===== Secrets / keys (never commit) =====
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
+
+# Generated outputs from tests/snapshots
+install-debug.txt
+Tools/Snapshots/*.txt
+
+
+# ===== HIPS Guardrails =====
+
+# Logs / traces / dumps
+*.log
+*.evtx
+*.etl
+*.dmp
+*.tmp
+*transcript*
+test-results_*.json
+
+# Backup / artifacts
+*.bak
+*.bak_*
+*.old
+*.zip
+*.msi
+
+# Generated outputs from tests/snapshots
+install-debug.txt
+Tools/Snapshots/*.txt
+
+# Per-machine runtime state (PII lives here)
+Firewall/State/
+Firewall/Logs/
+Firewall/Snapshots/
+Firewall/DEV-Only/State/
+Firewall/Live/Baseline/firewall-baseline.json
+
+# Private keys (never commit)
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
