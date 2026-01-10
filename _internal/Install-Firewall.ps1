@@ -1,4 +1,4 @@
-﻿# Install-Firewall.ps1
+# Install-Firewall.ps1
 # One-shot installer for Firewall Core system
 # MUST be run as admin (auto-elevates)
 
@@ -217,3 +217,77 @@ Write-Output ""
 
 Stop-TranscriptSafe
 Write-Host "[SUCCESS] Firewall Core installation completed." -ForegroundColor Green
+
+# --- BEGIN FIREWALLCORE TOAST SELFHEAL INFRA ---
+# Self-healing Toast Listener infra (no console windows; background tasks)
+try {
+    $RepoRoot = "C:\FirewallInstaller"
+    $LiveRoot = "C:\Firewall"
+
+    # ---- Copy packaged sounds (repo) -> live install root ----
+    $RepoSounds = Join-Path $RepoRoot "Firewall\Sounds"
+    $LiveSounds = Join-Path $LiveRoot "Sounds"
+    if (Test-Path $RepoSounds) {
+        if (-not (Test-Path $LiveSounds)) { New-Item -ItemType Directory -Path $LiveSounds -Force | Out-Null }
+        Copy-Item -Path (Join-Path $RepoSounds "*.wav") -Destination $LiveSounds -Force -ErrorAction SilentlyContinue
+        Write-Host "[OK] Sounds staged: $LiveSounds"
+    } else {
+        Write-Host "[WARN] Repo sounds folder missing: $RepoSounds"
+    }
+
+    # ---- Copy watchdog script -> live ----
+    $RepoWatchdog = Join-Path $RepoRoot "Firewall\System\FirewallToastWatchdog.ps1"
+    $LiveSystem   = Join-Path $LiveRoot "System"
+    if (-not (Test-Path $LiveSystem)) { New-Item -ItemType Directory -Path $LiveSystem -Force | Out-Null }
+    if (Test-Path $RepoWatchdog) {
+        Copy-Item -Path $RepoWatchdog -Destination (Join-Path $LiveSystem "FirewallToastWatchdog.ps1") -Force
+        Write-Host "[OK] Watchdog staged: $LiveSystem\FirewallToastWatchdog.ps1"
+    } else {
+        Write-Host "[WARN] Repo watchdog missing: $RepoWatchdog"
+    }
+
+    # ---- Ensure USER listener scheduled task runs hidden ----
+    # If installer already creates the task, this just forces the Action args to include -WindowStyle Hidden.
+    $UserTask = Get-ScheduledTask -TaskName "FirewallCore Toast Listener" -ErrorAction SilentlyContinue
+    if ($UserTask) {
+        try {
+            $a = $UserTask.Actions[0]
+            if ($a.Execute -match "powershell\.exe|pwsh\.exe") {
+                if ($a.Arguments -notmatch "-WindowStyle\s+Hidden") {
+                    $newArgs = $a.Arguments.Trim()
+                    # Add -WindowStyle Hidden near the front (safe)
+                    $newArgs = $newArgs -replace "^-NoProfile", "-NoProfile -WindowStyle Hidden"
+                    if ($newArgs -eq $a.Arguments) {
+                        $newArgs = "-WindowStyle Hidden " + $newArgs
+                    }
+                    $UserTask.Actions[0].Arguments = $newArgs
+                    Set-ScheduledTask -TaskName "FirewallCore Toast Listener" -TaskPath $UserTask.TaskPath -Action $UserTask.Actions[0] | Out-Null
+                    Write-Host "[OK] Updated listener task to run hidden"
+                }
+            }
+        } catch {
+            Write-Host "[WARN] Could not enforce hidden window on listener task"
+        }
+    }
+
+    # ---- Create/Update SYSTEM watchdog task (every minute) ----
+    $WatchdogScript = Join-Path $LiveSystem "FirewallToastWatchdog.ps1"
+    if (Test-Path $WatchdogScript) {
+        $tn = "FirewallCore Toast Watchdog"
+        $tr = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogScript`""
+        # Use schtasks for rock-solid minute scheduling (avoids repetition duration formatting issues)
+        schtasks.exe /Create /F /TN "$tn" /SC MINUTE /MO 1 /RU "SYSTEM" /RL HIGHEST /TR "$tr" | Out-Null
+        Write-Host "[OK] Watchdog task ensured: $tn"
+    } else {
+        Write-Host "[WARN] Watchdog script missing at install time: $WatchdogScript"
+    }
+
+    # ---- Start tasks (background) ----
+    try { Start-ScheduledTask -TaskName "FirewallCore Toast Listener" | Out-Null } catch {}
+    try { schtasks.exe /Run /TN "FirewallCore Toast Watchdog" | Out-Null } catch {}
+
+} catch {
+    Write-Host "[WARN] Toast self-heal infra install block failed: $($_.Exception.Message)"
+}
+# --- END FIREWALLCORE TOAST SELFHEAL INFRA ---
+
