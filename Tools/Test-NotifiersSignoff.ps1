@@ -6,6 +6,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure notifier module is loaded (Send-FirewallNotification)
+if (-not (Get-Command Send-FirewallNotification -ErrorAction SilentlyContinue)) {
+    $repoRoot = (& git rev-parse --show-toplevel 2>$null)
+    if (-not $repoRoot) { $repoRoot = (Get-Location).Path }
+
+    $modPath = Join-Path $repoRoot "Firewall\Modules\FirewallNotifications.psm1"
+    if (-not (Test-Path $modPath)) {
+        throw "Missing module: $modPath"
+    }
+
+    Import-Module $modPath -Force
+
+    if (-not (Get-Command Send-FirewallNotification -ErrorAction SilentlyContinue)) {
+        throw "Failed to load Send-FirewallNotification from $modPath"
+    }
+}
+
+
 $LogRoot = Join-Path $env:ProgramData "FirewallCore\Logs"
 New-Item -ItemType Directory -Force $LogRoot | Out-Null
 $LogPath = Join-Path $LogRoot ("Notifiers-Signoff_{0}.log" -f $TestId)
