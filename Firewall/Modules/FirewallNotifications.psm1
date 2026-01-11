@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $script:ProgramRoot  = Join-Path $env:ProgramData "FirewallCore"
@@ -23,7 +23,7 @@ function Ensure-EventSource {
 }
 
 function New-EventId {
-    param([ValidateSet('Info','Warning','Critical')] [string]$Severity)
+    param([ValidateSet('Info','Warn','Warning','Critical')] [string]$Severity)
     switch ($Severity) {
         'Info'     { 1001 }
         'Warning'  { 2001 }
@@ -33,7 +33,7 @@ function New-EventId {
 
 function Write-FirewallEvent {
     param(
-        [ValidateSet('Info','Warning','Critical')] [string]$Severity,
+        [ValidateSet('Info','Warn','Warning','Critical')] [string]$Severity,
         [string]$Title,
         [string]$Message,
         [string]$TestId
@@ -58,7 +58,7 @@ function Write-FirewallEvent {
 
 function New-NotificationPayload {
     param(
-        [ValidateSet('Info','Warning','Critical')] [string]$Severity,
+        [ValidateSet('Info','Warn','Warning','Critical')] [string]$Severity,
         [string]$Title,
         [string]$Message,
         [int]$EventId,
@@ -94,7 +94,9 @@ function Enqueue-FirewallNotification {
 function Send-FirewallNotification {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][ValidateSet('Info','Warning','Critical')] [string]$Severity,
+        [Alias('Id','EID')]
+        [int]$EventId = 3000,
+        [Parameter(Mandatory)][ValidateSet('Info','Warn','Warning','Critical')] [string]$Severity,
         [Parameter(Mandatory)][string]$Title,
         [Parameter(Mandatory)][string]$Message,
         [string]$TestId,
@@ -102,6 +104,9 @@ function Send-FirewallNotification {
     [ValidateSet('Toast','Dialog','Both')][string]$Ux
     )
 
+
+    # NormalizeSeverity_WarnToWarning
+    if ($Severity -eq 'Warn') { $Severity = 'Warning' }
     # Default UX routing (contract)
     if (-not $PSBoundParameters.ContainsKey('Ux') -or [string]::IsNullOrWhiteSpace($Ux)) {
       switch ($Severity) {
@@ -121,5 +126,7 @@ function Send-FirewallNotification {
 }
 
 Export-ModuleMember -Function Send-FirewallNotification, Enqueue-FirewallNotification, New-NotificationPayload, Write-FirewallEvent, New-EventId
+
+
 
 
