@@ -9,7 +9,7 @@
   "4001": {
     "Severity": "Warning",
     "View": "FirewallCore-4001",
-    "Sound": "WindowsExclamation",
+    "Sound": "chimes.wav",
     "Tray": false,
     "Blocking": false
   },

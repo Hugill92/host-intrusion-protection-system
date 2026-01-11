@@ -60,8 +60,36 @@ function Get-SoundPath {
   return $null
 }
 
+function Start-SoundForSeconds {
+  param(
+    [Parameter(Mandatory)][string]$FileName,
+    [Parameter(Mandatory)][int]$Seconds
+  )
+
+  if ($Seconds -le 0) { return }
+
+  $p = Get-SoundPath -FileName $FileName
+  if (-not $p) { return }
+
+  try {
+    $player = New-Object System.Media.SoundPlayer $p
+    $player.PlayLooping()
+
+    $stopTimer = New-Object System.Windows.Forms.Timer
+    $stopTimer.Interval = [Math]::Max(250, $Seconds * 1000)
+    $stopTimer.Add_Tick({
+      try {
+        $stopTimer.Stop(); $stopTimer.Dispose()
+        $player.Stop()
+      } catch {}
+    })
+    $stopTimer.Start()
+  } catch {}
+}
+
 function Play-Sound {
   param([Parameter(Mandatory)][string]$FileName)
+  # Back-compat: one-shot play
   $p = Get-SoundPath -FileName $FileName
   if (-not $p) { return }
   try { (New-Object System.Media.SoundPlayer $p).Play() } catch {}
@@ -260,9 +288,9 @@ function Show-NotificationDialog {
 
   $autoCloseSeconds = $null
   switch ($Severity) {
-    'Info'    { Play-Sound 'ding.wav'   ; $autoCloseSeconds = 15 }
-    'Warning' { Play-Sound 'chimes.wav' ; $autoCloseSeconds = 30 }
-    'Critical'{ Play-Sound 'chord.wav'  ; $autoCloseSeconds = $null }
+    'Info'    { Start-SoundForSeconds -FileName 'ding.wav'   -Seconds 15 ; $autoCloseSeconds = 15 }
+    'Warning' { Start-SoundForSeconds -FileName 'chimes.wav' -Seconds 30 ; $autoCloseSeconds = 30 }
+    'Critical'{ Start-SoundForSeconds -FileName 'chord.wav'  -Seconds 10 ; $autoCloseSeconds = $null }
   }
 
   $deadline = $null
@@ -288,7 +316,7 @@ function Show-NotificationDialog {
   if ($Severity -eq 'Critical') {
     $rem = New-Object System.Windows.Forms.Timer
     $rem.Interval = 10000
-    $rem.Add_Tick({ try { Play-Sound 'chord.wav' } catch {} })
+    $rem.Add_Tick({ try { Start-SoundForSeconds -FileName 'chord.wav' -Seconds 10 } catch {} })
     $rem.Start()
   }
 
@@ -321,12 +349,6 @@ function Show-NotificationDialog {
   if ($timer) { $timer.Start() }
 
   if ($Severity -eq 'Critical') { [void]$form.ShowDialog() } else { [void]$form.Show() }
-}
-
-function Ensure-Dirs {
-  foreach ($p in @($script:CoreRoot,$script:QueueRoot,$script:PendingDir,$script:ProcDir,$script:FailDir,$script:ViewsRoot)) {
-    if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
-  }
 }
 
 function Process-QueueOnce {
@@ -363,3 +385,37 @@ while ($true) {
   Process-QueueOnce
 }
 
+
+# SIG # Begin signature block
+# MIIFtgYJKoZIhvcNAQcCoIIFpzCCBaMCAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCoADJfjWu3sclt
+# zzBOwPgEYgbh24AHPK7i8S/9r3pveaCCAyAwggMcMIICBKADAgECAhAWqBrNbp/s
+# q0LWLpUoGJqsMA0GCSqGSIb3DQEBCwUAMCYxJDAiBgNVBAMMG0ZpcmV3YWxsQ29y
+# ZSBTY3JpcHQgU2lnbmluZzAeFw0yNjAxMTExMDMzMDBaFw0zNjAxMTExMDQzMDBa
+# MCYxJDAiBgNVBAMMG0ZpcmV3YWxsQ29yZSBTY3JpcHQgU2lnbmluZzCCASIwDQYJ
+# KoZIhvcNAQEBBQADggEPADCCAQoCggEBALanpHAxqchTmDsDelBMMGqhuD/qBCS6
+# WBhFkFyipQH1RYozRTLMorh/XyL90qtuHSWc53r1JEwy07Fyeq4VVvpSQpf/kDDx
+# fuSpEDKkux9Oqbm0E0fUbCg33kXEPliunM8qnrtz0QKsudVLCSdRc1lzgBNI7vYS
+# LoybGQYGSlRKiITXafzKHM3TGp7kxhuc+Fcz1IxTnAd3NRKrUHGfm0p3rflpPL4c
+# 8STqXkZCATWtgfkaoCJ6VKbfTn6Plsv54t0rqBmRFfKd5DkmsNrVCdCQk408iBF5
+# B9gMtNU+U7Kp9e527JxWcMT5vZaKZ0GhNhYopLJLS+E5CDAtjWH+EgECAwEAAaNG
+# MEQwDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMDMB0GA1UdDgQW
+# BBRo4Db7+Vk/nbKtkGTT9k1im36MhjANBgkqhkiG9w0BAQsFAAOCAQEADoGX2VSj
+# mrwdYR7ShaEsj/rtxOBqFDGK1uKMxJAcnjqsD45jhE+fEqMNlvx+Nw7pjxxvLyQd
+# zL9JY/hrLgQxdeGCCJyuXxoaOqdDv5UNs9J1UiHd9YitD6Y++GiMCIPNu3JJoUL4
+# OmXTs8stDk9jM2m2nbN3vyGOI7SifX+O9cBe6uK/UgiNRQ+D4mSi1A6PsGdPlDcU
+# 2QYjt+xT6q6hqgVqgvqWmwrzqkEw1TlQ4d9rVQxmxRH8a2SofdULbbdw6CJJXn4F
+# 0Z6fE8KPe1nELXplmRsulgrx1xJJ/mjs7EsVq6tEClQ5Mt0n5RoqxRhfJYGrpo0a
+# cEKp1Uw2HG8aQTGCAewwggHoAgEBMDowJjEkMCIGA1UEAwwbRmlyZXdhbGxDb3Jl
+# IFNjcmlwdCBTaWduaW5nAhAWqBrNbp/sq0LWLpUoGJqsMA0GCWCGSAFlAwQCAQUA
+# oIGEMBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisG
+# AQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcN
+# AQkEMSIEIPfFF0fPeFLoAmdlBTUEBDu2GXBpnnr4Sl2O5kZ0R0FcMA0GCSqGSIb3
+# DQEBAQUABIIBAC0NiIth1fLqGq7qCQ1Bb5q0FeCD8KCejOeY2Z1ajp5knlpxLTWS
+# C1S3hkZ5vY4vZloI+Q3FVgODEAvU4+77cS+coFWKgIHVHr3SSrGUmrIS4a3DoM2+
+# +TC8ij+c6PcDPZHu5ieK6RCUh2rltPF1GwdRQIVCnImdy5z46/JIBnwaYC8w/Ocz
+# VQ5JZ7wR9Dpm2HRXd0RO0775yywhB3U982mUR6DF5+cSuyoFbpYHFNDm/BpSR3lC
+# i6JTlt0wX9uTUwYBLjZzJikntO7H6sgzl3ol4qYgbdM0rnK0bYVBh4dCynynCdZm
+# Mb4fZTyhm2ZCIbJcE9gh3I4TXIM05Xs7NTE=
+# SIG # End signature block
