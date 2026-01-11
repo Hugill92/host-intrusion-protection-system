@@ -78,3 +78,21 @@ For each severity (Info / Warn / Critical):
    - Verify Close/X does not dismiss.
    - Verify Manual Review performs acknowledgement.
    - Verify reminder repeats every ~10s until acknowledged, then stops.
+
+## Implementation status (2026-01-10 sprint)
+
+### Verified wins
+- Queue plumbing confirmed: payloads land in Pending and are moved by the listener.
+- Custom WAV sounds confirmed (Windows system sounds suppressed for toasts).
+- Protocol activation added for toast actions:
+  - irewallcore-review:// opens Review Log / Details via FirewallToastActivate.ps1
+- Warning dialog auto-close adjusted to 20s; reminder cadence preserved at 10s for manual review loops.
+
+### Remaining signoff items (finish line)
+- Restore/guarantee toast popup visibility (banner rendering) consistently across reboots and shell-host state.
+- Ensure “Click to EV/Review” works for each severity with correct folder/file mapping.
+- Finalize per-severity UX:
+  - Info: fast, low friction, deterministic (tray/center visibility)
+  - Warning: toast + optional dialog (Review Log)
+  - Critical: toast + mandatory dialog + manual review loop
+

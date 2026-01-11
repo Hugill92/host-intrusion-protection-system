@@ -104,3 +104,31 @@ Must verify:
 ## Exit codes (architectural intent)
 - Use well-known Windows Installer-style codes when aborting operations.
 - Always log the root cause before exiting non-zero.
+
+## Notifier pipeline (Queue → Listener → Toast/Dialog)
+
+### Producer
+- Send-FirewallNotification writes a SchemaVer=1 JSON payload to:
+  - C:\ProgramData\FirewallCore\NotifyQueue\Pending\*.json
+- Payload includes: CreatedUtc, Severity, Title, Message, EventId (derived), TestId, Provider, Mode, Host, User, and UX routing.
+
+### Listener (user session, STA)
+- Runner: C:\Firewall\User\FirewallToastListener-Runner.ps1
+- Listener: C:\Firewall\User\FirewallToastListener.ps1
+- Reads Pending, moves items to Processing, then routes:
+  - Toast-only → Processed
+  - Dialog workflow → Reviewed (Warning) / Working (Critical)
+- Heartbeat file used to confirm listener activity:
+  - C:\ProgramData\FirewallCore\State\toastlistener.heartbeat
+
+### Toast behavior
+- WinRT toast rendered via ToastNotificationManager.
+- Toast XML uses <audio silent='true'/> so Windows system sounds never play.
+- Custom WAV sounds are played by FirewallCore (ding/chimes/chord).
+- Toast buttons/actions use protocol activation:
+  - irewallcore-review://open?... handled by FirewallToastActivate.ps1
+
+### Dialog behavior
+- Warning dialog auto-closes (20s).
+- Critical dialog requires manual review and reminds (10s cadence).
+

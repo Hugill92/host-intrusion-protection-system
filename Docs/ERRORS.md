@@ -35,3 +35,30 @@ Do not register or start scheduled tasks unless:
 - preflight passes
 - script integrity/parse checks pass
 - principals are verified (SYSTEM vs user vs service account)
+
+## Notifiers troubleshooting notes (2026-01-10)
+
+### Toast popup not visible (Show() returns OK)
+Symptom: WinRT toast Show() returns success, payloads drain, sounds play, but no banner appears.
+Notes: Can be caused by shell-host state, notification platform state, or per-app banner suppression.
+Mitigations used during sprint:
+- Ensure listener runs in interactive user session (STA).
+- Ensure HKCU values are enabled:
+  - PushNotifications\ToastEnabled=1
+  - Notifications\Settings\<AppId>\ShowBanner=1
+- Restart WpnService / WpnUserService and shell hosts (Explorer / ShellExperienceHost), or reboot.
+
+### StrictMode gotcha when searching strings containing `$f` / `$QueueFile`
+Symptom: Select-String -Pattern "...\$f..." throws because PowerShell expands variables in double quotes under StrictMode.
+Fix: Use single-quoted patterns:
+- -Pattern 'QueueFile\s*=\s*\$f\.Name'
+
+### Select-String -Recurse parameter
+Symptom: Select-String -Recurse not available in some PS builds/contexts.
+Fix: Use Get-ChildItem pipeline:
+- Get-ChildItem -Recurse -File | Select-String -Pattern ...
+
+### Kafka native dependency load failure (rolled back)
+Symptom: Confluent.Kafka Build() fails: "Failed to load the librdkafka native library."
+Fix: Defer until we have a pinned runtime distribution plan for librdkafka.dll (win-x64) plus managed dll placement and load-path guarantees.
+

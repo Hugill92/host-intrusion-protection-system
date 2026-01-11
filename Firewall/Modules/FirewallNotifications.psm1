@@ -98,14 +98,28 @@ function Send-FirewallNotification {
         [Parameter(Mandatory)][string]$Title,
         [Parameter(Mandatory)][string]$Message,
         [string]$TestId,
-        [ValidateSet('Dev','Forced','Pentest','Live')] [string]$Mode = 'Dev'
+        [ValidateSet('Dev','Forced','Pentest','Live')] [string]$Mode = 'Dev',
+    [ValidateSet('Toast','Dialog','Both')][string]$Ux
     )
+
+    # Default UX routing (contract)
+    if (-not $PSBoundParameters.ContainsKey('Ux') -or [string]::IsNullOrWhiteSpace($Ux)) {
+      switch ($Severity) {
+        'Critical' { $Ux = 'Both' }
+        'Warning'  { $Ux = 'Toast' }
+        default    { $Ux = 'Toast' }
+      }
+    }
+
 
     $eid = Write-FirewallEvent -Severity $Severity -Title $Title -Message $Message -TestId $TestId
 
     $payload = New-NotificationPayload -Severity $Severity -Title $Title -Message $Message -EventId $eid -TestId $TestId -Mode $Mode
     Enqueue-FirewallNotification -Payload $payload | Out-Null
     return $payload
+      Ux = $Ux
 }
 
 Export-ModuleMember -Function Send-FirewallNotification, Enqueue-FirewallNotification, New-NotificationPayload, Write-FirewallEvent, New-EventId
+
+

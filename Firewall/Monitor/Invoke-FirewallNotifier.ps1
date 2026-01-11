@@ -1,10 +1,4 @@
-# Invoke-FirewallNotifier.ps1
-# Production listener for FirewallCore notifications (PS 5.1+ compatible)
-
-[CmdletBinding()]
-param(
-    [int]$PollMs = 200
-)
+param([switch]$Once)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -12,348 +6,360 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-function Ensure-Dir([string]$p) {
-    if ([string]::IsNullOrWhiteSpace($p)) { return }
-    if (!(Test-Path -LiteralPath $p)) {
-        New-Item -ItemType Directory -Path $p -Force | Out-Null
+# ==========================
+# FirewallCore Invoke Notifier
+# Queue consumer (Pending -> Processed / Failed)
+# UI:
+#   Info    = bottom-right, non-blocking, auto-close 15s, ding.wav
+#   Warning = center,      non-blocking, auto-close 30s, chimes.wav
+#   Critical= center,      BLOCKING, no X/Close, repeats chord.wav every 10s until acknowledged
+# All dialogs: click "Review logs" opens Event Viewer FILTERED view and closes (except Critical needs Acknowledge).
+# NO tray balloons / NotifyIcon.
+# ==========================
+
+# region Paths
+$script:CoreRoot   = Join-Path $env:ProgramData "FirewallCore"
+$script:QueueRoot  = Join-Path $script:CoreRoot "NotifyQueue"
+$script:PendingDir = Join-Path $script:QueueRoot "Pending"
+$script:ProcDir    = Join-Path $script:QueueRoot "Processed"
+$script:FailDir    = Join-Path $script:QueueRoot "Failed"
+$script:ViewsRoot  = Join-Path $script:CoreRoot "EventViews"
+
+# Prefer live config (self-contained install), then repo fallback
+$script:MapCandidates = @(
+  "C:\Firewall\Config\EventViewMap.json",
+  "C:\FirewallInstaller\Firewall\Config\EventViewMap.json",
+  (Join-Path $script:ViewsRoot "EventViewMap.json")
+)
+
+$script:SoundsDirCandidates = @(
+  "C:\Firewall\Monitor\Sounds",
+  "C:\Firewall\Monitor",
+  "C:\Windows\Media"
+)
+# endregion
+
+function Ensure-Dirs {
+  foreach ($p in @($script:CoreRoot,$script:QueueRoot,$script:PendingDir,$script:ProcDir,$script:FailDir,$script:ViewsRoot)) {
+    if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
+  }
+}
+
+function Get-FirstExistingPath {
+  param([Parameter(Mandatory)][string[]]$Paths)
+  foreach ($p in $Paths) { if ($p -and (Test-Path -LiteralPath $p)) { return $p } }
+  return $null
+}
+
+function Get-SoundPath {
+  param([Parameter(Mandatory)][string]$FileName)
+  foreach ($dir in $script:SoundsDirCandidates) {
+    $p = Join-Path $dir $FileName
+    if (Test-Path -LiteralPath $p) { return $p }
+  }
+  return $null
+}
+
+function Play-Sound {
+  param([Parameter(Mandatory)][string]$FileName)
+  $p = Get-SoundPath -FileName $FileName
+  if (-not $p) { return }
+  try { (New-Object System.Media.SoundPlayer $p).Play() } catch {}
+}
+
+function Load-EventViewMap {
+  $mapPath = Get-FirstExistingPath -Paths $script:MapCandidates
+  if (-not $mapPath) { return @{} }
+
+  try {
+    $raw = Get-Content -LiteralPath $mapPath -Raw -ErrorAction Stop
+    if (-not $raw) { return @{} }
+    $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+
+    $ht = @{}
+    foreach ($p in $obj.PSObject.Properties) {
+      $ht[$p.Name] = $p.Value
     }
+    return $ht
+  } catch {
+    return @{}
+  }
 }
 
-function Get-PropValue($obj, [string]$name) {
-    if ($null -eq $obj) { return $null }
-    $p = $obj.PSObject.Properties[$name]
-    if ($null -eq $p) { return $null }
-    return $p.Value
+function New-ViewFile {
+  param(
+    [Parameter(Mandatory)][int]$EventId,
+    [Parameter(Mandatory)][string]$ViewName
+  )
+  Ensure-Dirs
+  $safe = ($ViewName -replace '[^a-zA-Z0-9_\-\.]', '_')
+  $viewPath = Join-Path $script:ViewsRoot ("{0}.xml" -f $safe)
+
+@"
+<QueryList>
+  <Query Id="0" Path="FirewallCore">
+    <Select Path="FirewallCore">*[System[EventID=$EventId]]</Select>
+  </Query>
+</QueryList>
+"@ | Set-Content -LiteralPath $viewPath -Encoding UTF8 -Force
+
+  return $viewPath
 }
 
-function Normalize-Severity([string]$sev, [int]$eventId) {
-    if ($sev) {
-        $s = $sev.Trim().ToLowerInvariant()
-        if ($s -in @("info","information")) { return "Info" }
-        if ($s -in @("warn","warning")) { return "Warning" }
-        if ($s -in @("crit","critical","error","fatal")) { return "Critical" }
-    }
-    # sane fallback if caller didn’t specify
-    if ($eventId -ge 9000) { return "Critical" }
-    if ($eventId -ge 4000) { return "Warning" }
-    if ($eventId -ge 2000) { return "Warning" }
-    return "Info"
+function Open-EventViewerFiltered {
+  param([Parameter(Mandatory)][int]$EventId)
+
+  $map = Load-EventViewMap
+  $key = [string]$EventId
+
+  $viewName = $null
+  if ($map.ContainsKey($key) -and $map[$key] -and $map[$key].View) {
+    $viewName = [string]$map[$key].View
+  } else {
+    $viewName = "FirewallCore-$EventId"
+  }
+
+  $viewPath = New-ViewFile -EventId $EventId -ViewName $viewName
+
+  try {
+    Start-Process "eventvwr.msc" -ArgumentList "/v:`"$viewPath`"" | Out-Null
+  } catch {
+    Start-Process "eventvwr.msc" | Out-Null
+  }
 }
 
-function Default-SoundFor([string]$severity) {
-    switch ($severity) {
-        "Warning"  { return "chimes.wav" }
-        "Critical" { return "chord.wav" }
-        default    { return "ding.wav" }
-    }
+function New-DialogForm {
+  param(
+    [Parameter(Mandatory)][ValidateSet('Info','Warning','Critical')][string]$Severity,
+    [Parameter(Mandatory)][string]$Title,
+    [Parameter(Mandatory)][string]$Message,
+    [Parameter(Mandatory)][int]$EventId
+  )
+
+  $form = New-Object System.Windows.Forms.Form
+  $form.StartPosition   = 'Manual'
+  $form.TopMost         = $true
+  $form.ShowInTaskbar   = $false
+  $form.BackColor       = [System.Drawing.Color]::FromArgb(32,32,32)
+  $form.ForeColor       = [System.Drawing.Color]::White
+  $form.Font            = New-Object System.Drawing.Font("Segoe UI", 9)
+  $form.FormBorderStyle = 'FixedSingle'
+  $form.MinimizeBox     = $false
+  $form.MaximizeBox     = $false
+
+  if ($Severity -eq 'Critical') {
+    $form.ControlBox = $false   # no X
+  } else {
+    $form.ControlBox = $true
+  }
+
+  # Layout: Title label, message textbox, button row (buttons always visible)
+  $layout = New-Object System.Windows.Forms.TableLayoutPanel
+  $layout.Dock = 'Fill'
+  $layout.BackColor = $form.BackColor
+  $layout.Padding = New-Object System.Windows.Forms.Padding(14,12,14,12)
+  $layout.RowCount = 3
+  $layout.ColumnCount = 1
+  $layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+  $layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+  $layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+  $layout.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+
+  $lblTitle = New-Object System.Windows.Forms.Label
+  $lblTitle.AutoSize = $true
+  $lblTitle.Text = $Title
+  $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+  $lblTitle.ForeColor = [System.Drawing.Color]::White
+  $lblTitle.Margin = New-Object System.Windows.Forms.Padding(0,0,0,8)
+
+  $txt = New-Object System.Windows.Forms.TextBox
+  $txt.Multiline   = $true
+  $txt.ReadOnly    = $true
+  $txt.BorderStyle = 'None'
+  $txt.BackColor   = $form.BackColor
+  $txt.ForeColor   = [System.Drawing.Color]::Gainsboro
+  $txt.ScrollBars  = 'Vertical'
+  $txt.Text        = $Message
+  $txt.Dock        = 'Fill'
+
+  $btnRow = New-Object System.Windows.Forms.FlowLayoutPanel
+  $btnRow.Dock = 'Fill'
+  $btnRow.FlowDirection = 'RightToLeft'
+  $btnRow.WrapContents  = $false
+  $btnRow.AutoSize      = $true
+  $btnRow.Margin        = New-Object System.Windows.Forms.Padding(0,10,0,0)
+  $btnRow.Padding       = New-Object System.Windows.Forms.Padding(0)
+
+  $btnReview = New-Object System.Windows.Forms.Button
+  $btnReview.Text = "Review logs"
+  $btnReview.AutoSize = $true
+  $btnReview.Margin = New-Object System.Windows.Forms.Padding(8,0,0,0)
+
+  $btnClose = $null
+  $btnAck   = $null
+
+  if ($Severity -eq 'Critical') {
+    $btnAck = New-Object System.Windows.Forms.Button
+    $btnAck.Text = "I acknowledge"
+    $btnAck.AutoSize = $true
+    $btnAck.Margin = New-Object System.Windows.Forms.Padding(8,0,0,0)
+    $btnRow.Controls.Add($btnAck)
+    $btnRow.Controls.Add($btnReview)
+  } else {
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Text = "Close"
+    $btnClose.AutoSize = $true
+    $btnClose.Margin = New-Object System.Windows.Forms.Padding(8,0,0,0)
+    $btnRow.Controls.Add($btnClose)
+    $btnRow.Controls.Add($btnReview)
+  }
+
+  $layout.Controls.Add($lblTitle, 0, 0)
+  $layout.Controls.Add($txt, 0, 1)
+  $layout.Controls.Add($btnRow, 0, 2)
+  $form.Controls.Add($layout)
+
+  # Size + position
+  $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  $width  = 560
+  $height = switch ($Severity) {
+    'Info'     { 220 }
+    'Warning'  { 260 }
+    'Critical' { 300 }
+  }
+  $form.Size = New-Object System.Drawing.Size($width, $height)
+
+  if ($Severity -eq 'Info') {
+    $form.Location = New-Object System.Drawing.Point($work.Right - $form.Width - 12, $work.Bottom - $form.Height - 12)
+  } else {
+    $form.Location = New-Object System.Drawing.Point([int]($work.Left + (($work.Width - $form.Width) / 2)), [int]($work.Top + (($work.Height - $form.Height) / 2)))
+  }
+
+  return [pscustomobject]@{
+    Form      = $form
+    Title     = $lblTitle
+    TextBox   = $txt
+    BtnReview = $btnReview
+    BtnClose  = $btnClose
+    BtnAck    = $btnAck
+    EventId   = $EventId
+    Severity  = $Severity
+  }
 }
 
-function Default-AutoCloseFor([string]$severity) {
-    switch ($severity) {
-        "Warning"  { return 30 }
-        "Info"     { return 15 }
-        default    { return 0 } # Critical = manual
-    }
-}
+function Show-NotificationDialog {
+  param(
+    [Parameter(Mandatory)][ValidateSet('Info','Warning','Critical')][string]$Severity,
+    [Parameter(Mandatory)][string]$Title,
+    [Parameter(Mandatory)][string]$Message,
+    [Parameter(Mandatory)][int]$EventId
+  )
 
-function Read-JsonSafe([string]$path) {
-    $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8
-    if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
-    return ($raw | ConvertFrom-Json)
-}
+  $ctx  = New-DialogForm -Severity $Severity -Title $Title -Message $Message -EventId $EventId
+  $form = $ctx.Form
 
-function Read-EventViewMap([string]$path) {
-    if (!(Test-Path -LiteralPath $path)) { return $null }
-    try {
-        $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8
-        if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
-        return ($raw | ConvertFrom-Json)
-    } catch {
-        return $null
-    }
-}
+  $autoCloseSeconds = $null
+  switch ($Severity) {
+    'Info'    { Play-Sound 'ding.wav'   ; $autoCloseSeconds = 15 }
+    'Warning' { Play-Sound 'chimes.wav' ; $autoCloseSeconds = 30 }
+    'Critical'{ Play-Sound 'chord.wav'  ; $autoCloseSeconds = $null }
+  }
 
-function Get-MapEntry($mapObj, [string]$eventIdStr) {
-    if ($null -eq $mapObj) { return $null }
-    $p = $mapObj.PSObject.Properties[$eventIdStr]
-    if ($null -eq $p) { return $null }
-    return $p.Value
-}
+  $deadline = $null
+  if ($autoCloseSeconds) { $deadline = (Get-Date).AddSeconds($autoCloseSeconds) }
 
-function Play-Wav([string]$wavName) {
-    if ([string]::IsNullOrWhiteSpace($wavName)) { return }
-    $wavPath = $wavName
-    if (!(Test-Path -LiteralPath $wavPath)) {
-        $candidate = Join-Path $env:WINDIR ("Media\" + $wavName)
-        if (Test-Path -LiteralPath $candidate) { $wavPath = $candidate }
-    }
-    if (!(Test-Path -LiteralPath $wavPath)) { return }
-
-    try {
-        $sp = New-Object System.Media.SoundPlayer $wavPath
-        $sp.Play()
-    } catch { }
-}
-
-function Export-FilteredEvtx([string]$logName, [int]$eventId, [string]$outDir) {
-    Ensure-Dir $outDir
-    $stamp = Get-Date -Format "yyyyMMdd_HHmmss_fff"
-    $out = Join-Path $outDir ("{0}_EID{1}_{2}.evtx" -f $logName, $eventId, $stamp)
-    $query = "*[System[(EventID=$eventId)]]"
-    try {
-        & wevtutil.exe epl $logName $out "/q:$query" "/ow:true" 2>$null | Out-Null
-        if (Test-Path -LiteralPath $out) { return $out }
-    } catch { }
-    return $null
-}
-
-function Open-EventViewerFor([string]$logName, [int]$eventId, [string]$tempDir) {
-    if ([string]::IsNullOrWhiteSpace($logName)) { $logName = "FirewallCore" }
-    $evtx = Export-FilteredEvtx -logName $logName -eventId $eventId -outDir $tempDir
-    if ($evtx) {
-        Start-Process -FilePath "eventvwr.msc" -ArgumentList ("/l:`"{0}`"" -f $evtx) | Out-Null
-        return
-    }
-    # fallback: open Event Viewer normally
-    Start-Process -FilePath "eventvwr.msc" | Out-Null
-}
-
-function Show-Dialog(
-    [string]$severity,
-    [string]$title,
-    [string]$message,
-    [int]$eventId,
-    [string]$logName,
-    [string]$soundName,
-    [int]$autoCloseSec,
-    [bool]$requireAck,
-    [bool]$center
-) {
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = $title
-    $form.Width = 560
-    $form.Height = 240
-    $form.TopMost = $true
-    $form.StartPosition = if ($center) { "CenterScreen" } else { "Manual" }
-    $form.BackColor = [System.Drawing.Color]::White
-
-    if ($requireAck) {
-        # No X button for critical
-        $form.ControlBox = $false
-        $form.FormBorderStyle = "FixedDialog"
-    } else {
-        $form.FormBorderStyle = "FixedDialog"
-        $form.MaximizeBox = $false
-        $form.MinimizeBox = $false
-    }
-
-    if (-not $center) {
-        $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-        $form.Left = $wa.Right - $form.Width - 18
-        $form.Top  = $wa.Bottom - $form.Height - 18
-    }
-
-    $lblTitle = New-Object System.Windows.Forms.Label
-    $lblTitle.Left = 16
-    $lblTitle.Top = 14
-    $lblTitle.Width = 520
-    $lblTitle.Height = 28
-    $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-    $lblTitle.Text = $title
-    $form.Controls.Add($lblTitle)
-
-    $tb = New-Object System.Windows.Forms.TextBox
-    $tb.Left = 16
-    $tb.Top = 48
-    $tb.Width = 520
-    $tb.Height = 110
-    $tb.Multiline = $true
-    $tb.ReadOnly = $true
-    $tb.ScrollBars = "Vertical"
-    $tb.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $tb.Text = $message
-    $form.Controls.Add($tb)
-
-    $btnReview = New-Object System.Windows.Forms.Button
-    $btnReview.Text = "Review logs"
-    $btnReview.Width = 110
-    $btnReview.Height = 28
-    $btnReview.Left = 16
-    $btnReview.Top = 168
-    $form.Controls.Add($btnReview)
-
-    $btnClose = $null
-    $btnAck   = $null
-
-    if ($requireAck) {
-        $btnAck = New-Object System.Windows.Forms.Button
-        $btnAck.Text = "I acknowledge"
-        $btnAck.Width = 130
-        $btnAck.Height = 28
-        $btnAck.Left = 406
-        $btnAck.Top = 168
-        $form.Controls.Add($btnAck)
-    } else {
-        $btnClose = New-Object System.Windows.Forms.Button
-        $btnClose.Text = "Close"
-        $btnClose.Width = 90
-        $btnClose.Height = 28
-        $btnClose.Left = 446
-        $btnClose.Top = 168
-        $form.Controls.Add($btnClose)
-        $form.AcceptButton = $btnClose
-    }
-
-    $tempDir = Join-Path $env:ProgramData "FirewallCore\NotifyQueue\Temp"
-    Ensure-Dir $tempDir
-
-    $btnReview.Add_Click({
-        Open-EventViewerFor -logName $logName -eventId $eventId -tempDir $tempDir
-        if (-not $requireAck) {
-            try { $form.Close() } catch { }
+  $timer = $null
+  if ($deadline) {
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+      try {
+        if ($form.IsDisposed) { $timer.Stop(); $timer.Dispose(); return }
+        if ((Get-Date) -ge $deadline) {
+          $timer.Stop()
+          $form.Close()
+          $timer.Dispose()
         }
+      } catch { }
     })
+  }
 
-    if ($btnClose) {
-        $btnClose.Add_Click({
-            try { $form.Close() } catch { }
-        })
+  $rem = $null
+  if ($Severity -eq 'Critical') {
+    $rem = New-Object System.Windows.Forms.Timer
+    $rem.Interval = 10000
+    $rem.Add_Tick({ try { Play-Sound 'chord.wav' } catch {} })
+    $rem.Start()
+  }
+
+  $openEvAndClose = {
+    try { Open-EventViewerFiltered -EventId $EventId } catch {}
+    if ($Severity -ne 'Critical') {
+      try { $form.Close() } catch {}
     }
+  }
 
-    if ($btnAck) {
-        $btnAck.Add_Click({
-            try { $form.Close() } catch { }
-        })
-    }
+  $ctx.Title.Add_Click($openEvAndClose)
+  $ctx.TextBox.Add_Click($openEvAndClose)
+  $ctx.BtnReview.Add_Click($openEvAndClose)
 
-    # Sound once on show
-    $form.Add_Shown({ Play-Wav $soundName })
+  if ($ctx.BtnClose) { $ctx.BtnClose.Add_Click({ try { $form.Close() } catch {} }) }
 
-    # Auto close timer (Info/Warn)
-    $timerClose = $null
-    if ($autoCloseSec -gt 0 -and -not $requireAck) {
-        $remaining = $autoCloseSec
-        $timerClose = New-Object System.Windows.Forms.Timer
-        $timerClose.Interval = 1000
-        $timerClose.Add_Tick({
-            $remaining--
-            if ($remaining -le 0) {
-                $timerClose.Stop()
-                try { $form.Close() } catch { }
-            }
-        })
-        $timerClose.Start()
-        $form.Add_FormClosed({ try { $timerClose.Stop(); $timerClose.Dispose() } catch { } })
-    }
+  if ($ctx.BtnAck) {
+    $ctx.BtnAck.Add_Click({
+      try { Open-EventViewerFiltered -EventId $EventId } catch {}
+      try { if ($rem) { $rem.Stop(); $rem.Dispose() } } catch {}
+      try { $form.Close() } catch {}
+    })
+  }
 
-    # Critical repeat sound until ack
-    $timerRepeat = $null
-    if ($requireAck) {
-        $timerRepeat = New-Object System.Windows.Forms.Timer
-        $timerRepeat.Interval = 8000
-        $timerRepeat.Add_Tick({ Play-Wav $soundName })
-        $timerRepeat.Start()
-        $form.Add_FormClosed({ try { $timerRepeat.Stop(); $timerRepeat.Dispose() } catch { } })
-    }
+  $form.Add_FormClosed({
+    try { if ($timer) { $timer.Stop(); $timer.Dispose() } } catch {}
+    try { if ($rem)   { $rem.Stop();   $rem.Dispose()   } } catch {}
+  })
 
-    [void]$form.ShowDialog()
+  if ($timer) { $timer.Start() }
+
+  if ($Severity -eq 'Critical') { [void]$form.ShowDialog() } else { [void]$form.Show() }
 }
 
-function Process-OneFile([string]$filePath, $eventViewMap) {
-    $data = Read-JsonSafe $filePath
-    if ($null -eq $data) { throw "Empty/invalid JSON." }
-
-    $eventId = [int](Get-PropValue $data "EventId")
-    $sevRaw  = [string](Get-PropValue $data "Severity")
-    $title   = [string](Get-PropValue $data "Title")
-    $msg     = [string](Get-PropValue $data "Message")
-
-    if ([string]::IsNullOrWhiteSpace($title)) { $title = "FirewallCore Alert" }
-    if ([string]::IsNullOrWhiteSpace($msg))   { $msg = "(no message provided)" }
-
-    $eventIdStr = [string]$eventId
-    $mapEntry = Get-MapEntry $eventViewMap $eventIdStr
-
-    $logName = [string](Get-PropValue $mapEntry "Log")
-    if ([string]::IsNullOrWhiteSpace($logName)) { $logName = "FirewallCore" }
-
-    $severity = Normalize-Severity -sev $sevRaw -eventId $eventId
-
-    # Sound: message overrides map overrides defaults
-    $sound = [string](Get-PropValue $data "Sound")
-    if ([string]::IsNullOrWhiteSpace($sound)) {
-        $sound = [string](Get-PropValue $mapEntry "Sound")
-    }
-    if ([string]::IsNullOrWhiteSpace($sound)) {
-        $sound = Default-SoundFor $severity
-    }
-
-    # AutoClose: message overrides map overrides defaults
-    $ac = 0
-    $acRaw = Get-PropValue $data "AutoCloseSec"
-    if ($acRaw -ne $null) { $ac = [int]$acRaw }
-    if ($ac -le 0) {
-        $mapAc = Get-PropValue $mapEntry "AutoCloseSec"
-        if ($mapAc -ne $null) { $ac = [int]$mapAc }
-    }
-    if ($ac -le 0) { $ac = Default-AutoCloseFor $severity }
-
-    $center = ($severity -ne "Info")  # Warn/Critical centered
-    $requireAck = ($severity -eq "Critical")
-
-    if ($severity -eq "Critical") {
-        # Force deterministic critical wording
-        $msg = $msg + "`r`n`r`nMANUAL REVIEW REQUIRED:`r`n1) Click 'Review logs'`r`n2) Confirm the event details`r`n3) Click 'I acknowledge' to dismiss"
-    }
-
-    Show-Dialog -severity $severity -title $title -message $msg -eventId $eventId -logName $logName -soundName $sound -autoCloseSec $ac -requireAck:$requireAck -center:$center
+function Ensure-Dirs {
+  foreach ($p in @($script:CoreRoot,$script:QueueRoot,$script:PendingDir,$script:ProcDir,$script:FailDir,$script:ViewsRoot)) {
+    if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
+  }
 }
 
-# ---------------- MAIN LOOP ----------------
-$queueRoot  = Join-Path $env:ProgramData "FirewallCore\NotifyQueue"
-$pendingDir = Join-Path $queueRoot "Pending"
-$procDir    = Join-Path $queueRoot "Processed"
-$failDir    = Join-Path $queueRoot "Failed"
-Ensure-Dir $pendingDir
-Ensure-Dir $procDir
-Ensure-Dir $failDir
+function Process-QueueOnce {
+  Ensure-Dirs
 
-$mapPath = Join-Path $env:ProgramData "FirewallCore\EventViewMap.json"
+  $files = Get-ChildItem -LiteralPath $script:PendingDir -Filter *.json -ErrorAction SilentlyContinue
+  foreach ($f in $files) {
+    $procPath = Join-Path $script:ProcDir $f.Name
+    $failPath = Join-Path $script:FailDir $f.Name
 
-Write-Host "[FirewallCore] Dialog notifier running (no tray / no balloons)" -ForegroundColor Cyan
+    try {
+      $n = Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json
+
+      if (-not $n.Severity -or -not $n.Title -or -not $n.Message -or -not $n.EventId) {
+        throw "Invalid payload shape"
+      }
+
+      Move-Item -LiteralPath $f.FullName -Destination $procPath -Force
+
+      $sev = [string]$n.Severity
+      if ($sev -notin @('Info','Warning','Critical')) { $sev = 'Info' }
+
+      Show-NotificationDialog -Severity $sev -Title ([string]$n.Title) -Message ([string]$n.Message) -EventId ([int]$n.EventId)
+    } catch {
+      try { Move-Item -LiteralPath $f.FullName -Destination $failPath -Force } catch {}
+    }
+  }
+}
+Process-QueueOnce
+if ($Once) { return }
+
 while ($true) {
-    try { [System.Windows.Forms.Application]::DoEvents() | Out-Null } catch { }
-
-    $eventViewMap = Read-EventViewMap $mapPath
-
-    $files = Get-ChildItem -LiteralPath $pendingDir -Filter "*.json" -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime
-
-    foreach ($f in $files) {
-        $src = $f.FullName
-        $work = Join-Path $queueRoot ("Processing\" + $f.Name)
-        Ensure-Dir (Split-Path -Parent $work)
-
-        try {
-            Move-Item -LiteralPath $src -Destination $work -Force
-
-            Process-OneFile -filePath $work -eventViewMap $eventViewMap
-
-            $done = Join-Path $procDir ($f.BaseName + "_" + ([guid]::NewGuid().ToString("N")) + ".json")
-            Move-Item -LiteralPath $work -Destination $done -Force
-        } catch {
-            $err = $_.Exception.Message
-            Write-Host ("[WARN] Failed: {0} -> {1}" -f $f.Name, $err) -ForegroundColor Yellow
-            try {
-                $dstFail = Join-Path $failDir ($f.BaseName + "_" + ([guid]::NewGuid().ToString("N")) + ".json")
-                if (Test-Path -LiteralPath $work) {
-                    Move-Item -LiteralPath $work -Destination $dstFail -Force
-                } elseif (Test-Path -LiteralPath $src) {
-                    Move-Item -LiteralPath $src -Destination $dstFail -Force
-                }
-            } catch { }
-        }
-    }
-
-    Start-Sleep -Milliseconds $PollMs
+  Start-Sleep -Milliseconds 300
+  Process-QueueOnce
 }
+

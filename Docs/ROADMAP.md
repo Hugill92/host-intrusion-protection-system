@@ -86,3 +86,7 @@ CI additions:
 - Explicit GPO policy layer (documented and optional).
 - File + registry scanning baseline enforcement.
 - Network expansion features (separate roadmap section once core reliability is stable).
+
+### Telemetry / Streaming (Deferred)
+- Kafka streaming of notification events was prototyped (Confluent.Kafka) but rolled back due to native dependency packaging (librdkafka.dll) and config-schema guardrails. Revisit after v1 notifier signoff with a pinned dependency bundle and installer integration.
+
