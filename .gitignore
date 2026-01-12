@@ -75,3 +75,7 @@ Firewall/Live/Baseline/firewall-baseline.json
 *.pem
 *.key
 *.pvk
+
+# local scratch/backups
+/_scratch/
+
