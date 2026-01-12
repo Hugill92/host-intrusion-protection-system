@@ -79,3 +79,5 @@ Firewall/Live/Baseline/firewall-baseline.json
 # local scratch/backups
 /_scratch/
 
+# local scratch/backups
+/_scratch/
