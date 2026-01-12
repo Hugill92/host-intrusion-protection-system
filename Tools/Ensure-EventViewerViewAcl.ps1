@@ -1,53 +1,51 @@
-[CmdletBinding(SupportsShouldProcess)]
+[CmdletBinding()]
 param(
-  # One or more directories that contain Event Viewer view XML files
-  [string[]]$Roots = @(
+  [string[]] $ViewDirs = @(
     (Join-Path $env:ProgramData "Microsoft\Event Viewer\Views"),
     (Join-Path $env:ProgramData "FirewallCore\User\Views")
   ),
-
-  # Which views to touch
-  [string]$Pattern = "FirewallCore-*.xml",
-
-  # Principal that must be able to read the view XMLs
-  [string]$Principal = "BUILTIN\Users",
-
-  # Use (R) to be maximally compatible; Event Viewer reads fine with this.
-  [ValidateSet("R","RX")]
-  [string]$Right = "R"
+  [string] $Principal = "BUILTIN\Users",
+  [string] $Pattern = "FirewallCore*.xml",
+  [switch] $Strict
 )
 
 $ErrorActionPreference = "Stop"
 
-function Grant-Read([string]$FilePath) {
-  $grant = "${Principal}:($Right)"
-  if ($PSCmdlet.ShouldProcess($FilePath, "icacls /grant $grant")) {
-    & icacls $FilePath /grant $grant | Out-Null
-  }
-}
+function Write-Info([string]$m){ Write-Host $m -ForegroundColor Cyan }
+function Write-Warn([string]$m){ Write-Host $m -ForegroundColor Yellow }
+function Write-Ok([string]$m){ Write-Host $m -ForegroundColor Green }
+function Write-Fail([string]$m){ Write-Host $m -ForegroundColor Red }
 
-$changed = 0
-$missing = 0
+$anyFail = $false
 
-foreach ($root in $Roots) {
-  if (!(Test-Path -LiteralPath $root)) {
-    Write-Host "SKIP (missing): $root" -ForegroundColor DarkGray
-    $missing++
+foreach ($dir in $ViewDirs) {
+  Write-Info "=== Ensure ACL: $dir ==="
+
+  if (!(Test-Path -LiteralPath $dir)) {
+    Write-Warn "SKIP: missing dir: $dir"
     continue
   }
 
-  Write-Host "SCAN: $root" -ForegroundColor Cyan
-
-  $files = Get-ChildItem -LiteralPath $root -File -Filter $Pattern -ErrorAction SilentlyContinue
-  if (!$files) {
-    Write-Host "  none matching $Pattern" -ForegroundColor DarkGray
+  $files = Get-ChildItem -LiteralPath $dir -File -Filter $Pattern -ErrorAction Stop
+  if (!$files -or $files.Count -eq 0) {
+    Write-Warn "No matches for $Pattern in $dir"
     continue
   }
 
   foreach ($f in $files) {
-    Grant-Read -FilePath $f.FullName
-    $changed++
+    try {
+      & icacls $f.FullName /grant "${Principal}:(R)" | Out-Null
+      Write-Ok ("OK  : {0}" -f $f.Name)
+    }
+    catch {
+      $anyFail = $true
+      Write-Fail ("FAIL: {0} :: {1}" -f $f.FullName, $_.Exception.Message)
+      if ($Strict) { throw }
+    }
   }
 }
 
-Write-Host "DONE. Updated ACL on $changed file(s). Missing roots: $missing" -ForegroundColor Green
+if ($anyFail -and $Strict) { throw "One or more ACL updates failed." }
+
+if ($anyFail) { Write-Warn "DONE with failures (non-strict)." }
+else { Write-Ok "DONE: all ACL updates succeeded." }

@@ -1,23 +1,32 @@
 [CmdletBinding()]
 param(
-  [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+  [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
   [switch]$Strict
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 
-$src = Join-Path $RepoRoot "Firewall\Monitor\EventViews"
-if (!(Test-Path -LiteralPath $src)) { throw "Missing views source: $src" }
+$src = Join-Path $RepoRoot 'Firewall\Monitor\EventViews'
+if (!(Test-Path -LiteralPath $src)) {
+  throw "Source views folder missing: $src"
+}
 
-$destCore = Join-Path $env:ProgramData "FirewallCore\User\Views"
-$destEV   = Join-Path $env:ProgramData "Microsoft\Event Viewer\Views"
+$evViews   = Join-Path $env:ProgramData 'Microsoft\Event Viewer\Views'
+$coreViews = Join-Path $env:ProgramData 'FirewallCore\User\Views'
 
-New-Item -ItemType Directory -Path $destCore, $destEV -Force | Out-Null
+New-Item -ItemType Directory -Path $evViews   -Force | Out-Null
+New-Item -ItemType Directory -Path $coreViews -Force | Out-Null
 
-# Copy all FirewallCore*.xml (EventId + Range views)
-Copy-Item -Path (Join-Path $src "FirewallCore-*.xml") -Destination $destCore -Force -ErrorAction SilentlyContinue
-Copy-Item -Path (Join-Path $src "FirewallCore-*.xml") -Destination $destEV   -Force -ErrorAction SilentlyContinue
+$files = Get-ChildItem -LiteralPath $src -Filter '*.xml' -File -ErrorAction Stop
+if ($files.Count -eq 0) { throw "No *.xml files found in: $src" }
 
-# Ensure ACLs so non-admin Review Log doesn't hit Access Denied
-$aclTool = Join-Path $RepoRoot "Tools\Ensure-EventViewerViewAcl.ps1"
-& $aclTool -Directories @($destEV, $destCore) -Pattern "FirewallCore-*.xml" -Strict:$Strict
+foreach ($f in $files) {
+  Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $evViews   $f.Name) -Force
+  Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $coreViews $f.Name) -Force
+}
+
+# ACL pass (Users read) — avoids “Access denied” when a toast action tries to open a view
+$aclTool = Join-Path $RepoRoot 'Tools\Ensure-EventViewerViewAcl.ps1'
+& $aclTool -Path $evViews, $coreViews -Filter 'FirewallCore*.xml' -Strict:$Strict
+
+Write-Host "Install-stage complete: Event Viewer views staged + ACL ensured." -ForegroundColor Green
