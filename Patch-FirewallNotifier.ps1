@@ -1,4 +1,4 @@
-﻿<#
+<#
 Patch-FirewallNotifier.ps1
 Creates a repeatable patch that removes $repoRoot dependency from Invoke-FirewallNotifier.ps1
 and fixes the Sounds path to use $PSScriptRoot\Sounds.
@@ -65,10 +65,10 @@ function Patch-File([string]$Path) {
 
     # Replace known bad Sounds patterns that depend on $repoRoot
     $s2 = $s
-    $s2 = $s2 -replace 'Join-Path\s+\$repoRoot\s+"Firewall\\Monitor\\Sounds"\)', 'Join-Path $PSScriptRoot "Sounds")'
-    $s2 = $s2 -replace "Join-Path\s+\`$repoRoot\s+'Firewall\\Monitor\\Sounds'\)", 'Join-Path $PSScriptRoot "Sounds")'
-    $s2 = $s2 -replace 'Join-Path\s+\$repoRoot\s+"Firewall\\Monitor\\Sounds"', 'Join-Path $PSScriptRoot "Sounds"'
-    $s2 = $s2 -replace "Join-Path\s+\`$repoRoot\s+'Firewall\\Monitor\\Sounds'", 'Join-Path $PSScriptRoot "Sounds"'
+    $s2 = $s2 -replace 'Join-Path\s+\$repoRoot\s+"Firewall\\Sounds"\)', 'Join-Path $PSScriptRoot "Sounds")'
+    $s2 = $s2 -replace "Join-Path\s+\`$repoRoot\s+'Firewall\\Sounds'\)", 'Join-Path $PSScriptRoot "Sounds")'
+    $s2 = $s2 -replace 'Join-Path\s+\$repoRoot\s+"Firewall\\Sounds"', 'Join-Path $PSScriptRoot "Sounds"'
+    $s2 = $s2 -replace "Join-Path\s+\`$repoRoot\s+'Firewall\\Sounds'", 'Join-Path $PSScriptRoot "Sounds"'
 
     # If script still references $repoRoot anywhere, inject a defensive block so it can never crash
     if ($s2 -match '\$repoRoot') {
@@ -153,4 +153,5 @@ Start-Notifier $toRun
   Write-Host "[OK] Patch complete. Start later with:" -ForegroundColor Green
   Write-Host "     cmd.exe /k powershell.exe -NoProfile -ExecutionPolicy Bypass -Sta -File `"$liveNotifier`"" -ForegroundColor Gray
 }
+
 
