@@ -166,3 +166,100 @@ Get-CimInstance Win32_Process |
 - Run Loop B (uninstall) and capture verification output (tasks removed, protocol handler removed, ProgramData cleanup, no listener processes).
 - Run Loop C (reinstall) to confirm determinism.
 
+### Update (2026-01-12 13:11:54)
+- Ghost shells still appear about every 5 minutes after install.
+- W2 reopened; investigate watchdog/task/process trigger.
+- Next: capture `powershell.exe` and `conhost.exe` at flash time to identify the source.
+
+
+
+<!-- BEGIN UNINSTALL_VERIFICATION_PASS -->
+---
+
+## Uninstall verification - PASS (2026-01-12)
+
+Outcome:
+- Uninstall completed successfully (start/end markers present).
+- Scheduled tasks verified removed/missing.
+- No toast listener/runner PowerShell processes remained.
+- Project-tag firewall rule scan returned no matches.
+- Default firewall profile state captured post-run.
+
+Operator evidence:
+- Capture uninstall log + debug log.
+- Capture before/after snapshots from Tools\Snapshots.
+- Run the fail-safe verification script below and save output.
+
+Admin panel integration:
+- Add this verification as a post-action step after Clean Uninstall.
+- Surface results in the status panel (PASS/WARN/FAIL per section).
+
+Fail-safe verification script (copy/paste):
+```powershell
+$ErrorActionPreference = "Stop"
+
+Write-Host ""
+Write-Host "=== A) Scheduled tasks (should be MISSING) ===" -ForegroundColor Cyan
+
+$tasks = @(
+  "Firewall Core Monitor",
+  "Firewall WFP Monitor",
+  "Firewall-Defender-Integration",
+  "FirewallCore Toast Listener",
+  "FirewallCore Toast Watchdog",
+  "FirewallCore-ToastListener",
+  "FirewallCore-ToastWatchdog",
+  "FirewallCore User Notifier"
+)
+
+foreach ($t in $tasks) {
+  $st = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+  if ($st) {
+    Write-Host ("FAIL: Task still present -> {0}" -f $t) -ForegroundColor Red
+    ($st.Actions | Select-Object -First 1) | Format-List Execute,Arguments,WorkingDirectory
+  } else {
+    Write-Host ("PASS: Task missing -> {0}" -f $t) -ForegroundColor Green
+  }
+}
+
+Write-Host ""
+Write-Host "=== B) Running related PowerShell processes (should be NONE) ===" -ForegroundColor Cyan
+$procs = Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -eq "powershell.exe" -and $_.CommandLine -match "FirewallToastListener|ToastWatchdog|FirewallCore" } |
+  Select-Object ProcessId, CommandLine
+
+if ($procs) {
+  Write-Host "FAIL: Found running related processes:" -ForegroundColor Red
+  $procs | Format-Table -AutoSize
+} else {
+  Write-Host "PASS: No related PowerShell processes found" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "=== C) Firewall rules (project-tag search) ===" -ForegroundColor Cyan
+$tags = @("FirewallCore","Firewall Core","HIPS","Host Intrusion Protection","Pentest","DEV-Only","Forced")
+$hits = @()
+foreach ($tag in $tags) {
+  $hits += Get-NetFirewallRule -ErrorAction SilentlyContinue |
+    Where-Object {
+      ($_.DisplayName -like ("*" + $tag + "*")) -or
+      ($_.Group -like ("*" + $tag + "*")) -or
+      ($_.Description -like ("*" + $tag + "*"))
+    }
+}
+$hits = $hits | Sort-Object -Property Name -Unique
+
+if ($hits.Count -gt 0) {
+  Write-Host ("WARN: Found firewall rules that match project tags: {0}" -f $hits.Count) -ForegroundColor Yellow
+  $hits | Select-Object DisplayName, Group, Enabled, Direction, Action, Profile | Format-Table -AutoSize
+} else {
+  Write-Host "PASS: No firewall rules matched project tags" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "=== D) Windows Firewall defaults quick sanity ===" -ForegroundColor Cyan
+Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction | Format-Table -AutoSize
+```
+
+<!-- END UNINSTALL_VERIFICATION_PASS -->
+

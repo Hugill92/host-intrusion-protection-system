@@ -1,43 +1,70 @@
-# Known Errors & Resolutions
+# Known Errors & Limitations
 
-This document records known installer and runtime errors encountered during development
-and the deterministic fixes applied.
-
----
-
-## Scheduled Task Creation Failure
-[unchanged]
+This document records known issues, their impact, and sprint ownership.
 
 ---
 
-## Installer Script Not Found / Path Drift
-[unchanged]
+## Scheduled Task Creation Failure (Resolved - Sprint 1)
+
+**Status**
+- Fixed.
+
+**Resolution**
+- Task action arguments are passed as a single deterministic string.
 
 ---
 
-## Event Viewer View Access (Historical)
-[unchanged]
+## Installer Script Path Drift (Resolved - Sprint 1)
+
+**Status**
+- Fixed.
+
+**Resolution**
+- Canonical internal script layout enforced.
+- Installer derives its root dynamically at runtime.
 
 ---
 
-## Ghost Console Window on Review Actions
+## Event Viewer Views (Completed - Prior Sprint)
+
+**Status**
+- Stable and functional.
+
+**Notes**
+- Deterministic view staging completed before Sprint 1.
+- Sprint 1 validated stability only.
+
+---
+
+## Ghost Console Window on Review Actions (Planned - Sprint 2)
 
 **Symptom**
-- A brief PowerShell console window flashes when selecting:
+- A brief console window appears when selecting:
   - "Review Event Viewer Logs"
   - "Review Logs"
-- Observed from both toast notifications and dialog boxes.
 
 **Impact**
 - Cosmetic only.
-- Does not affect log review functionality or system state.
-
-**Status**
-- Known issue.
-- Not a blocker for Sprint 1 completion.
 
 **Planned Resolution**
-- Eliminate visible console windows when invoking log review actions.
-- Ensure review actions execute fully hidden.
+- Execute review actions fully hidden.
 
 ---
+
+## Event Viewer ACL Hardening (Planned - Sprint 2)
+
+**Status**
+- Not a Sprint 1 blocker.
+
+**Planned Resolution**
+- Separate and harden ACLs for Event Viewer view access.
+- Improve diagnostics and install-time validation.
+
+---
+
+<!-- BEGIN SPRINT2_UNINSTALL_RESOLVED -->
+## Resolved - Sprint 2 (Uninstall reliability)
+- Issue: Uninstall runs could appear successful while leaving ambiguity (hang perception or incomplete evidence).
+- Resolution: deterministic uninstall ordering + explicit start/end markers + post-action verification script (tasks/process/rules/profile).
+- Outcome: Clean Uninstall validated (tasks removed/missing, no toast listener processes, project-tag rules absent, owned paths removed).
+<!-- END SPRINT2_UNINSTALL_RESOLVED -->

@@ -7,14 +7,19 @@ param(
     [string]$Mode = "LIVE"
 )
 
-# --- Ensure FirewallCore Event Log ---
+# --- Ensure FirewallCore Event Log (sources) ---
 $log = "FirewallCore"
-
-if (-not [System.Diagnostics.EventLog]::Exists($log)) {
-    New-EventLog -LogName $log -Source "FirewallCore"
-    New-EventLog -LogName $log -Source "FirewallCore-Pentest"
+$EventLogPrecheckWarning = $null
+try {
+    if (-not [System.Diagnostics.EventLog]::SourceExists("FirewallCore")) {
+        New-EventLog -LogName $log -Source "FirewallCore"
+    }
+    if (-not [System.Diagnostics.EventLog]::SourceExists("FirewallCore-Pentest")) {
+        New-EventLog -LogName $log -Source "FirewallCore-Pentest"
+    }
+} catch {
+    $EventLogPrecheckWarning = "Event log source precheck failed: $($_.Exception.Message). Will rely on Register-FirewallCore-EventLog.ps1."
 }
-
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -42,7 +47,18 @@ if (-not $IsAdmin) {
 # ============================================================
 # ROOTS – SINGLE SOURCE OF TRUTH
 # ============================================================
-$InstallerRoot = "C:\FirewallInstaller"
+$ThisDir = $PSScriptRoot
+
+# Expected layout:
+#   <InstallerRoot>\_internal\Install-Firewall.ps1   (this script)
+#   <InstallerRoot>\_internal\System\...            (installer payload)
+#   <InstallerRoot>\Firewall\...                     (repo payload / staging)
+$InstallerRoot = if ((Split-Path -Leaf $ThisDir) -ieq "_internal") {
+    Split-Path -Parent $ThisDir
+} else {
+    $ThisDir
+}
+
 $InternalRoot  = Join-Path $InstallerRoot "_internal"
 $FirewallRoot  = Join-Path $InstallerRoot "Firewall"
 
@@ -74,7 +90,7 @@ New-Item -ItemType Directory -Path $LiveSystemDir -Force | Out-Null
 $LogFile = Join-Path (Join-Path $LogsDir "Install") "install.log"
 
 function Stop-TranscriptSafe {
-    try { Stop-Transcript | Out-Null } catch {}
+    try { Stop-Transcript | Out-Null } catch { Write-Host "[WARN] Stop-Transcript failed: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 
 trap {
@@ -95,7 +111,28 @@ Write-Output "Elevated  : True"
 Write-Output "================================================="
 Write-Output ""
 
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+Write-Output "[STEP] Resolve roots and paths"
+Write-Output "InstallerRoot : $InstallerRoot"
+Write-Output "InternalRoot  : $InternalRoot"
+Write-Output "FirewallRoot  : $FirewallRoot"
+Write-Output "BasePath      : $BasePath"
+Write-Output "LiveSystemDir : $LiveSystemDir"
+Write-Output "LogsDir       : $LogsDir"
+Write-Output ""
+
+if ($EventLogPrecheckWarning) {
+    Write-Host "[WARN] $EventLogPrecheckWarning" -ForegroundColor Yellow
+}
+
+$commandLine = [Environment]::CommandLine
+$hasBypass = $commandLine -match '(?i)-ExecutionPolicy\s+Bypass'
+if (-not $hasBypass) {
+    try {
+        Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop
+    } catch {
+        Write-Host "[WARN] Set-ExecutionPolicy failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 
 Write-Host "[*] Starting Firewall Core installation..." -ForegroundColor Cyan
 
@@ -106,16 +143,33 @@ $RequiredSystemScripts = @(
     "Register-FirewallCore-EventLog.ps1"
 )
 
+function Resolve-InstallerPayloadScript {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $candidates = @(
+        (Join-Path $InternalSystemDir $Name),
+        (Join-Path (Join-Path $FirewallRoot "System") $Name),
+        (Join-Path $PSScriptRoot $Name)
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+    return $candidates | Select-Object -First 1
+}
+
+Write-Output "[STEP] Materialize system scripts"
 foreach ($script in $RequiredSystemScripts) {
-    $src = Join-Path $InternalSystemDir $script
+    $src = Resolve-InstallerPayloadScript -Name $script
     $dst = Join-Path $LiveSystemDir $script
 
-    if (-not (Test-Path $src)) {
-        throw "Installer missing required system script: $src"
+    if (-not $src) {
+        throw "Installer missing required system script (searched _internal\System + Firewall\System): $script"
     }
 
-    Copy-Item $src $dst -Force
+    Copy-Item -LiteralPath $src -Destination $dst -Force
 }
+
+Write-Host "[OK] System scripts materialized: $LiveSystemDir" -ForegroundColor Green
+
+
 
 # ============================================================
 # REGISTER FIREWALLCORE EVENT LOG (LIVE TREE ONLY)
@@ -135,36 +189,39 @@ Write-Host "[INSTALL] FirewallCore event log ready." -ForegroundColor Green
 # ============================================================
 Write-Host "[CERT] Checking trusted certificate" -ForegroundColor Cyan
 
-$cert = Get-ChildItem Cert:\LocalMachine\Root |
-    Where-Object Thumbprint -EQ $CertThumbprint
-
-if (-not $cert) {
-    if (-not (Test-Path $CertFilePath)) {
-        throw "Missing certificate file: $CertFilePath"
+$store = $null
+try {
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root","LocalMachine")
+    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+    $cert = $store.Certificates | Where-Object { $_.Thumbprint -eq $CertThumbprint }
+    if (-not $cert) {
+        if (-not (Test-Path $CertFilePath)) {
+            throw "Missing certificate file: $CertFilePath"
+        }
+        $newCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($CertFilePath)
+        $store.Add($newCert)
+        Write-Host "[CERT] Certificate imported" -ForegroundColor Green
+    } else {
+        Write-Host "[CERT] Certificate already trusted" -ForegroundColor DarkGray
     }
-    Import-Certificate -FilePath $CertFilePath `
-        -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
-    Write-Host "[CERT] Certificate imported" -ForegroundColor Green
-} else {
-    Write-Host "[CERT] Certificate already trusted" -ForegroundColor DarkGray
+} finally {
+    if ($store) { $store.Close() }
 }
 
 # ============================================================
-# SCHEDULED TASK – DEFENDER INTEGRATION (SYSTEM)
+# SCHEDULED TASK - DEFENDER INTEGRATION (SYSTEM)
 # ============================================================
+Write-Output "[STEP] Register scheduled tasks"
 if (-not (Test-Path $DefenderScript)) {
     throw "Missing Defender integration script: $DefenderScript"
 }
 
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @(
-    "-NoProfile",
-    "-ExecutionPolicy","AllSigned",
-    "-File","`"$DefenderScript`""
-)
+$ActionArgs = '-NoProfile -ExecutionPolicy AllSigned -File "{0}"' -f $DefenderScript
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ActionArgs
 
 $Trigger   = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$Settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
+$Settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -Hidden
 
 Register-ScheduledTask `
     -TaskName "Firewall-Defender-Integration" `
@@ -179,28 +236,74 @@ Write-Host "[OK] Scheduled task registered: Firewall-Defender-Integration" -Fore
 # ============================================================
 # TOAST LISTENER (USER LOGON)
 # ============================================================
-$ToastScript = Join-Path $FirewallRoot "User\FirewallToastListener.ps1"
+$LiveUserDir       = Join-Path $BasePath "User"
+$ToastRunnerLive   = Join-Path $LiveUserDir "FirewallToastListener-Runner.ps1"
+$ToastListenerLive = Join-Path $LiveUserDir "FirewallToastListener.ps1"
+$ToastScript       = $null
+
+if (Test-Path $ToastRunnerLive) {
+    $ToastScript = $ToastRunnerLive
+} elseif (Test-Path $ToastListenerLive) {
+    $ToastScript = $ToastListenerLive
+} else {
+    $ToastScript = Join-Path $FirewallRoot "User\FirewallToastListener.ps1"
+}
 
 if (Test-Path $ToastScript) {
-    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @(
-        "-STA","-NoProfile","-ExecutionPolicy","Bypass",
-        "-File","`"$ToastScript`""
-    )
-
-    $ToastTrigger   = New-ScheduledTaskTrigger -AtLogOn
+    $ToastActionArgs = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -STA -ExecutionPolicy Bypass -File "{0}"' -f $ToastScript
+    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ToastActionArgs
+    $ToastTrigger = New-ScheduledTaskTrigger -AtLogOn
     $ToastPrincipal = New-ScheduledTaskPrincipal `
         -UserId "$env:USERDOMAIN\$env:USERNAME" `
         -LogonType Interactive `
         -RunLevel Highest
+    $ToastSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -Hidden
 
     Register-ScheduledTask `
-        -TaskName "FirewallCore-ToastListener" `
+        -TaskName "FirewallCore Toast Listener" `
         -Action $ToastAction `
         -Trigger $ToastTrigger `
         -Principal $ToastPrincipal `
+        -Settings $ToastSettings `
         -Force | Out-Null
 
     Write-Host "[OK] Toast listener registered" -ForegroundColor Green
+} else {
+    Write-Host "[WARN] Toast listener script not found (skipped task): $ToastScript" -ForegroundColor Yellow
+}
+
+# ============================================================
+# TOAST PROTOCOL HANDLER (REVIEW LOG / DETAILS)
+# ============================================================
+$Protocol = "firewallcore-review"
+$ActivateScript = Join-Path $BasePath "User\FirewallToastActivate.ps1"
+$PsExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+$ProtocolCommand = "`"$PsExe`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ActivateScript`" `"%1`""
+
+function Register-ToastProtocol {
+    param([Parameter(Mandatory)][string]$RootKey)
+
+    $base = Join-Path $RootKey ("Software\Classes\{0}" -f $Protocol)
+    $cmdKey = Join-Path $base "shell\open\command"
+
+    New-Item -Path $base -Force | Out-Null
+    New-Item -Path $cmdKey -Force | Out-Null
+
+    New-ItemProperty -Path $base -Name "(default)" -Value ("URL:{0}" -f $Protocol) -Force | Out-Null
+    New-ItemProperty -Path $base -Name "URL Protocol" -Value "" -Force | Out-Null
+    Set-ItemProperty -Path $cmdKey -Name "(default)" -Value $ProtocolCommand -Force | Out-Null
+}
+
+if (Test-Path $ActivateScript) {
+    try {
+        Register-ToastProtocol -RootKey "HKLM:\"
+        Register-ToastProtocol -RootKey "HKCU:\"
+        Write-Host "[OK] Protocol handler registered (firewallcore-review)" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARN] Protocol handler registration failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "[WARN] Protocol handler skipped; missing $ActivateScript" -ForegroundColor Yellow
 }
 
 # ============================================================
@@ -221,7 +324,8 @@ Write-Host "[SUCCESS] Firewall Core installation completed." -ForegroundColor Gr
 # --- BEGIN FIREWALLCORE TOAST SELFHEAL INFRA ---
 # Self-healing Toast Listener infra (no console windows; background tasks)
 try {
-    $RepoRoot = "C:\FirewallInstaller"
+    Write-Host "[STEP] Toast self-heal infra" -ForegroundColor Cyan
+    $RepoRoot = $InstallerRoot
     $LiveRoot = "C:\Firewall"
 
     # ---- Copy packaged sounds (repo) -> live install root ----
@@ -248,25 +352,49 @@ try {
 
     # ---- Ensure USER listener scheduled task runs hidden ----
     # If installer already creates the task, this just forces the Action args to include -WindowStyle Hidden.
-    $UserTask = Get-ScheduledTask -TaskName "FirewallCore Toast Listener" -ErrorAction SilentlyContinue
-    if ($UserTask) {
-        try {
-            $a = $UserTask.Actions[0]
-            if ($a.Execute -match "powershell\.exe|pwsh\.exe") {
-                if ($a.Arguments -notmatch "-WindowStyle\s+Hidden") {
-                    $newArgs = $a.Arguments.Trim()
-                    # Add -WindowStyle Hidden near the front (safe)
-                    $newArgs = $newArgs -replace "^-NoProfile", "-NoProfile -WindowStyle Hidden"
-                    if ($newArgs -eq $a.Arguments) {
-                        $newArgs = "-WindowStyle Hidden " + $newArgs
+    $LiveUserDir       = Join-Path $LiveRoot "User"
+    $ToastRunnerLive   = Join-Path $LiveUserDir "FirewallToastListener-Runner.ps1"
+    $ToastListenerLive = Join-Path $LiveUserDir "FirewallToastListener.ps1"
+    $ToastTaskScript   = $null
+
+    if (Test-Path $ToastRunnerLive) {
+        $ToastTaskScript = $ToastRunnerLive
+    } elseif (Test-Path $ToastListenerLive) {
+        $ToastTaskScript = $ToastListenerLive
+    }
+
+    $ToastTasks = @(
+        "FirewallCore Toast Listener",
+        "FirewallCore-ToastListener"
+    )
+    foreach ($toastTaskName in $ToastTasks) {
+        $UserTask = Get-ScheduledTask -TaskName $toastTaskName -ErrorAction SilentlyContinue
+        if ($UserTask) {
+            try {
+                if ($ToastTaskScript) {
+                    $toastArgs = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -STA -ExecutionPolicy Bypass -File "{0}"' -f $ToastTaskScript
+                    $toastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $toastArgs
+                    Set-ScheduledTask -TaskName $toastTaskName -TaskPath $UserTask.TaskPath -Action $toastAction | Out-Null
+                    Write-Host "[OK] Updated listener task action: $toastTaskName" -ForegroundColor Green
+                } else {
+                    $a = $UserTask.Actions[0]
+                    if ($a.Execute -match "powershell\.exe|pwsh\.exe") {
+                        if ($a.Arguments -notmatch "-WindowStyle\\s+Hidden") {
+                            $newArgs = $a.Arguments.Trim()
+                            # Add -WindowStyle Hidden near the front (safe)
+                            $newArgs = $newArgs -replace "^-NoProfile", "-NoProfile -WindowStyle Hidden"
+                            if ($newArgs -eq $a.Arguments) {
+                                $newArgs = "-WindowStyle Hidden " + $newArgs
+                            }
+                            $UserTask.Actions[0].Arguments = $newArgs
+                            Set-ScheduledTask -TaskName $toastTaskName -TaskPath $UserTask.TaskPath -Action $UserTask.Actions[0] | Out-Null
+                            Write-Host "[OK] Updated listener task to run hidden: $toastTaskName"
+                        }
                     }
-                    $UserTask.Actions[0].Arguments = $newArgs
-                    Set-ScheduledTask -TaskName "FirewallCore Toast Listener" -TaskPath $UserTask.TaskPath -Action $UserTask.Actions[0] | Out-Null
-                    Write-Host "[OK] Updated listener task to run hidden"
                 }
+            } catch {
+                Write-Host "[WARN] Could not enforce hidden window on ${toastTaskName}: $($_.Exception.Message)" -ForegroundColor Yellow
             }
-        } catch {
-            Write-Host "[WARN] Could not enforce hidden window on listener task"
         }
     }
 
@@ -282,12 +410,25 @@ try {
         Write-Host "[WARN] Watchdog script missing at install time: $WatchdogScript"
     }
 
+    # ---- Restart toast processes to ensure hidden execution ----
+    $toastPattern = 'FirewallToastListener(-Runner)?\\.ps1|FirewallToastWatchdog\\.ps1'
+    $toastProcs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -and $_.CommandLine -match $toastPattern
+    }
+    if ($toastProcs) {
+        try {
+            Stop-Process -Id $toastProcs.ProcessId -Force -ErrorAction Stop
+            Write-Host "[OK] Stopped toast processes before restart"
+        } catch {
+            Write-Host "[WARN] Failed to stop toast processes: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
     # ---- Start tasks (background) ----
-    try { Start-ScheduledTask -TaskName "FirewallCore Toast Listener" | Out-Null } catch {}
-    try { schtasks.exe /Run /TN "FirewallCore Toast Watchdog" | Out-Null } catch {}
+    try { Start-ScheduledTask -TaskName "FirewallCore Toast Listener" | Out-Null } catch { Write-Host "[WARN] Failed to start Toast Listener task: $($_.Exception.Message)" -ForegroundColor Yellow }
+    try { schtasks.exe /Run /TN "FirewallCore Toast Watchdog" | Out-Null } catch { Write-Host "[WARN] Failed to start Toast Watchdog task: $($_.Exception.Message)" -ForegroundColor Yellow }
 
 } catch {
     Write-Host "[WARN] Toast self-heal infra install block failed: $($_.Exception.Message)"
 }
 # --- END FIREWALLCORE TOAST SELFHEAL INFRA ---
-

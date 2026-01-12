@@ -1,21 +1,24 @@
-# PR: Installer Hardening & System Baseline Preparation
+# PR: Sprint 1 - Installer Hardening
 
 ## Summary
-This pull request hardens the FirewallCore installer and uninstaller to ensure
-reliable deployment, clean removal, and readiness for future repair functionality.
+This pull request completes Sprint 1 by hardening the FirewallCore installer and uninstaller
+for reliability, correctness, and clean lifecycle management.
 
-## Key Changes
-[unchanged]
+## Delivered in Sprint 1
+- Installer path resolution fixes.
+- Scheduled task creation reliability.
+- Canonical internal script architecture.
+- Clean install and clean uninstall verification.
+- Repository hygiene improvements.
 
-## Deferred Work
-- Event Viewer ACL separation and hardening.
-- Repair mode for restoring baseline system state.
-- Removal of transient console windows when launching log review actions.
+## Out of Scope (Tracked for Sprint 2)
+- Repair mode and baseline drift correction.
+- Hidden execution for log review actions.
+- Event Viewer ACL hardening.
 
 ## Testing
-[unchanged]
-
-## Notes
-- The transient console window issue is cosmetic only and does not affect functionality.
+- Installer executed from non-standard paths.
+- Clean uninstall verified to remove all installer-owned artifacts.
+- System verified ready for reinstall.
 
 ---

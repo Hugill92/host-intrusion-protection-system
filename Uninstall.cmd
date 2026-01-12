@@ -1,66 +1,51 @@
-@echo off@echo off
-:: Auto-elevate to admin
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Requesting administrative privileges...
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
-
-:: Now running elevated
+@echo off
+setlocal EnableExtensions
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "_internal\Install-Firewall.ps1"
-pause
 
-
-:: ---- Require Admin ----
+rem ---- Require Admin (UAC prompt) ----
 net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Please run this uninstaller as Administrator.
-    pause
-    exit /b 1
+if %errorlevel% NEQ 0 (
+  echo Requesting administrative privileges...
+  powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%ComSpec%' -ArgumentList '/c','\"\"%~f0\"\" %*' -Verb RunAs"
+  exit /b
 )
 
-set ROOT=%~dp0
-set PS=%ROOT%_internal\Uninstall-Firewall.ps1
-set LOG=%ROOT%uninstall-debug.txt
+rem ---- Paths ----
+set "PSEXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "SCRIPT=%~dp0_internal\Uninstall-Firewall.ps1"
 
-if not exist "%PS%" (
-    echo [ERROR] Missing Uninstall-Firewall.ps1
-    pause
-    exit /b 1
+if not exist "%SCRIPT%" (
+  echo [ERROR] Missing script: "%SCRIPT%"
+  pause
+  exit /b 1
 )
 
-echo.
-echo Choose uninstall mode:
-echo   [1] Safe uninstall (keep signing certs for reinstall)
-echo   [2] Full/Clean uninstall (remove certs, restore defaults)
-echo.
+rem ---- Logs (keep repo clean; _scratch is ignored) ----
+set "LOGDIR=%~dp0_scratch\logs"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%" >nul 2>&1
 
-set /p MODE=Enter choice (1 or 2): 
+for /f %%I in ('"%PSEXE%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "(Get-Date).ToString(''yyyyMMdd_HHmmss'')"' ) do set "TS=%%I"
+if "%TS%"=="" set "TS=unknown_%RANDOM%"
 
-if "%MODE%"=="1" (
-    set FLAG=-KeepCerts
-) else if "%MODE%"=="2" (
-    set FLAG=-RemoveCerts
-) else (
-    echo Invalid choice.
-    pause
-    exit /b 1
-)
+set "LOG=%LOGDIR%\uninstall_%TS%.log"
+set "DBG=%LOGDIR%\uninstall_%TS%_debug.txt"
 
 echo [*] Running PowerShell uninstaller...
-powershell.exe -NoProfile -ExecutionPolicy Bypass ^
-  -File "%PS%" %FLAG% ^
-  *> "%LOG%" 2>&1
+echo     Script: %SCRIPT%
+echo     Log:    %LOG%
+echo     Debug:  %DBG%
 
-if %errorlevel% neq 0 (
-    echo [ERROR] Uninstall failed. See uninstall-debug.txt
-    pause
-    exit /b 1
+"%PSEXE%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%SCRIPT%" -Force -IgnoreTamper -IgnoreDrift %* 1>>"%LOG%" 2>>"%DBG%"
+set "RC=%errorlevel%"
+
+if %RC% NEQ 0 (
+  echo [ERROR] Uninstall failed (exit %RC%). See:
+  echo   %DBG%
+  pause
+  exit /b %RC%
 )
 
-echo [OK] Firewall Core removed successfully.
+echo [OK] Uninstall completed.
 echo Log: %LOG%
 pause
 exit /b 0

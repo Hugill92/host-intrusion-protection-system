@@ -40,7 +40,7 @@ Stability, lifecycle correctness, and execution hardening.
 - Preserve uninstall symmetry (if install creates it, uninstall removes it)
 
 ## Reference
-- `Docs/SPRINT_2_TRIAGE.md`
+- `Docs/Sprints/Sprint-2/SPRINT_2_TRIAGE.md`
 
 
 <!-- SPRINT2_PROGRESS -->
@@ -51,3 +51,23 @@ Stability, lifecycle correctness, and execution hardening.
 - W1/W2 validated (task args PS5.1-safe + hidden execution + live paths).
 - Next validation gates: W3 (uninstall) and Loop C reinstall determinism.
 
+
+<!-- BEGIN PHASE_MAINTENANCE_UI -->
+## Phase - Maintenance UI (Operator workflow)
+
+Purpose:
+- Provide a safe, repeatable operator entrypoint for lifecycle actions.
+
+Scope:
+- Read-only status panel + elevation workflow.
+- Admin-only actions: Install, Clean Uninstall, Repair (stub allowed if repair contract not finalized).
+
+Non-goals:
+- No extra utility buttons (logs/event viewer/restart/archive).
+- No new features beyond lifecycle workflow.
+
+Deliverables:
+- Maintenance dialog script under Firewall\User\
+- Wrapper launcher under Tools\
+- Logging to deterministic file paths
+<!-- END PHASE_MAINTENANCE_UI -->

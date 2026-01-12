@@ -1,34 +1,37 @@
 # Architecture Overview
 
-This document describes the installer, repair, and system integration architecture for FirewallCore.
+This document describes the FirewallCore installer architecture and future roadmap.
 
 ---
 
-## Installer Layout
-[unchanged]
+## Sprint 1 Scope (Completed)
+
+### Installer Architecture
+- Canonical installer logic lives under `_internal`.
+- Entry points:
+  - `Install.cmd`
+  - `Uninstall.cmd`
+- Clean install and clean uninstall behavior verified.
+
+### Uninstall Guarantees
+- Removes all installer-owned files, tasks, and configuration.
+- Leaves the system in a state suitable for immediate reinstall.
 
 ---
 
-## Wrapper Pattern
-[unchanged]
+## Sprint 2 Scope (Planned)
 
----
+### Repair Mode
+- Restore system state back to a known baseline hash.
+- Detect and correct drift for installer-owned artifacts.
+- Preserve logs and user data.
 
-## Install, Repair, and Uninstall Modes
-[unchanged]
+### Execution Hardening
+- Remove visible console windows from toast and dialog actions.
+- Ensure hidden execution paths are used consistently.
 
----
-
-## Event Viewer Integration
-
-- Custom Event Viewer views are deterministically staged.
-- Views are assumed present and loaded during install.
-- ACL hardening and separation is deferred to a future sprint.
-- View staging logic is idempotent and safe to rerun.
-- Review actions are invoked from notifications and dialogs.
-
-### Known Limitation
-- A transient console window may appear when launching log review actions.
-- This behavior is cosmetic and tracked for cleanup in a future sprint.
+### Event Viewer Hardening
+- ACL separation and hardening.
+- Improved install-time verification and logging.
 
 ---

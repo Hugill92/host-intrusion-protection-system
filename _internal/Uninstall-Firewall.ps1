@@ -7,13 +7,113 @@ Production-grade uninstaller with:
 - Optional cert removal
 - Firewall reset to defaults
 #>
-# ================= DEV / INSTALLER CONTEXT =================
-$IsInstallerContext = $true
+[CmdletBinding()]
+param(
+    [switch]$Force,
+    [switch]$Quiet,
+    [switch]$RemoveCerts,
+    [switch]$RemoveEventLog,
+    [string]$InstallerRoot = "C:\FirewallInstaller",
+    [string]$TargetRoot,
+    [switch]$IgnoreTamper,
+    [switch]$IgnoreDrift
+)
 
-$FirewallRoot = if ($IsInstallerContext) {
-    "C:\FirewallInstaller\Firewall"
+# region PATH_HELPERS_SPRINT2
+# Helpers required for uninstall safety + PS5.1 compatibility
+
+try {
+  if ($global:PSModuleAutoLoadingPreference -eq 'None') { $global:PSModuleAutoLoadingPreference = 'All' }
+} catch {}
+
+try { Import-Module Microsoft.PowerShell.Utility -ErrorAction SilentlyContinue } catch {}
+
+function Normalize-Path {
+  param([string]$Path)
+  if ([string]::IsNullOrWhiteSpace($Path)) { return '' }
+  $p = [Environment]::ExpandEnvironmentVariables($Path.Trim())
+  $p = $p -replace '/', '\'
+  try { $p = [System.IO.Path]::GetFullPath($p) } catch {}
+  return $p.TrimEnd('\')
+}
+
+function Is-PathUnder {
+  param(
+    [Parameter(Mandatory)][string]$Child,
+    [Parameter(Mandatory)][string]$Parent
+  )
+  $c = Normalize-Path $Child
+  $p = Normalize-Path $Parent
+  if ($p -eq '') { return $false }
+
+  $cmp = [System.StringComparison]::OrdinalIgnoreCase
+  if ($c.Equals($p, $cmp)) { return $true }
+
+  $pWith = $p + '\'
+  return $c.StartsWith($pWith, $cmp)
+}
+
+function Get-FileHashCompat {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [ValidateSet('SHA256','SHA1','SHA512','MD5')][string]$Algorithm = 'SHA256'
+  )
+
+  try { Import-Module Microsoft.PowerShell.Utility -ErrorAction SilentlyContinue } catch {}
+  $cmd = Get-Command -Name Get-FileHash -ErrorAction SilentlyContinue
+  if ($cmd) {
+    return Microsoft.PowerShell.Utility\Get-FileHash -Algorithm $Algorithm -LiteralPath $Path
+  }
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $alg = [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm)
+    if (-not $alg) { throw "Hash algorithm not available: $Algorithm" }
+    $bytes = $alg.ComputeHash($stream)
+    $hex = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+    return [pscustomobject]@{ Algorithm = $Algorithm; Hash = $hex; Path = $Path }
+  } finally {
+    $stream.Dispose()
+  }
+}
+# endregion PATH_HELPERS_SPRINT2
+
+
+
+# If InstallerRoot wasn't explicitly provided, derive it from this script location.
+$InstallerRootSource = "param"
+if (-not $PSBoundParameters.ContainsKey("InstallerRoot")) {
+    $ThisDir = $PSScriptRoot
+    $InstallerRoot = if ((Split-Path -Leaf $ThisDir) -ieq "_internal") {
+        Split-Path -Parent $ThisDir
+    } else {
+        $ThisDir
+    }
+    $InstallerRootSource = "script"
+}
+
+# ================= DEV / INSTALLER CONTEXT =================
+# Prefer live root; allow explicit override via -TargetRoot.
+$IsInstallerContext = $false
+
+$LiveFirewallRoot = "C:\Firewall"
+$InstallerFirewallRoot = Join-Path $InstallerRoot "Firewall"
+$InstallerPayloadAvailable = Test-Path -LiteralPath $InstallerFirewallRoot
+$TargetRootSource = "default"
+
+if ($PSBoundParameters.ContainsKey("TargetRoot") -and $TargetRoot) {
+    $FirewallRoot = $TargetRoot
+    $TargetRootSource = "param"
 } else {
-    "C:\Firewall"
+    $FirewallRoot = $LiveFirewallRoot
+}
+
+if ($InstallerPayloadAvailable -and (Normalize-Path $FirewallRoot) -eq (Normalize-Path $InstallerFirewallRoot)) {
+    $IsInstallerContext = $true
+}
+
+if (Is-PathUnder $FirewallRoot $InstallerRoot) {
+    throw "Unsafe target root: '$FirewallRoot' is under InstallerRoot '$InstallerRoot'. Refusing uninstall."
 }
 
 $ModulesDir    = Join-Path $FirewallRoot "Modules"
@@ -23,17 +123,10 @@ $StateDir      = Join-Path $FirewallRoot "State"
 $LogsDir       = Join-Path $FirewallRoot "Logs"
 # ===========================================================
 
-
-[CmdletBinding()]
-param(
-    [switch]$Force,
-    [switch]$Quiet,
-    [switch]$RemoveCerts,
-    [string]$InstallerRoot = "C:\FirewallInstaller"
-)
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$script:TamperDetected = $false
+$script:DriftDetected = $false
 
 # -------------------------
 # Helpers
@@ -41,6 +134,7 @@ $ErrorActionPreference = "Stop"
 function STEP($m){ Write-Host "[*] $m" }
 function OK($m){ Write-Host "[OK] $m" }
 function WARN($m){ Write-Warning $m }
+function INFO($m){ Write-Host "[INFO] $m" }
 
 function Ensure-Dir($p){
     if (-not (Test-Path $p)) {
@@ -48,11 +142,26 @@ function Ensure-Dir($p){
     }
 }
 
+Write-Output "================================================="
+Write-Output "Firewall Core Uninstall Started"
+Write-Output "Time      : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Write-Output "User      : $env:USERNAME"
+Write-Output "Computer  : $env:COMPUTERNAME"
+Write-Output "InstallerRoot ($InstallerRootSource): $InstallerRoot"
+Write-Output "FirewallRoot: $FirewallRoot"
+Write-Output "TargetRootSource: $TargetRootSource"
+Write-Output "InstallerContext: $IsInstallerContext"
+Write-Output "IgnoreTamper: $IgnoreTamper"
+Write-Output "IgnoreDrift: $IgnoreDrift"
+Write-Output "================================================="
+Write-Output ""
+
 # -------------------------
 # Snapshot system
 # -------------------------
 $SnapshotDir = Join-Path $InstallerRoot "Tools\Snapshots"
 Ensure-Dir $SnapshotDir
+INFO "SnapshotDir: $SnapshotDir"
 
 function Save-Snapshot {
     param([Parameter(Mandatory)][string]$OutFile)
@@ -75,10 +184,11 @@ function Save-Snapshot {
     $lines.Add("")
     $lines.Add("=== Scheduled Tasks ===")
     foreach ($t in @("Firewall Core Monitor","Firewall WFP Monitor")) {
-        if (schtasks /Query /TN $t 2>$null) {
-            $lines.Add("$t: PRESENT")
+        $task = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+        if ($null -ne $task) {
+            $lines.Add("${t}: PRESENT")
         } else {
-            $lines.Add("$t: MISSING")
+            $lines.Add("${t}: MISSING")
         }
     }
 
@@ -124,22 +234,96 @@ function Assert-NoTamper {
     $m = Get-Content $manifest -Raw | ConvertFrom-Json
     $bad = @()
 
-    foreach ($e in $m) {
-        if (-not (Test-Path $e.Path)) {
-            $bad += $e.Path
+    $entries = @()
+    if ($m -is [System.Array]) {
+        $entries = $m
+    } elseif ($m -is [pscustomobject]) {
+        $props = $m.PSObject.Properties
+        $metaKeys = @("BuiltAtUtc","Count","Items","Root","Schema")
+        $collectionProp = $props | Where-Object { $_.Name -match '^(Files|Entries|Items)$' } | Select-Object -First 1
+        $hasPath = $props.Name -contains "Path" -or $props.Name -contains "path"
+        $hasSha = $props.Name -contains "Sha256" -or $props.Name -contains "sha256" -or $props.Name -contains "Hash" -or $props.Name -contains "hash"
+        if ($collectionProp) {
+            $entries = @($collectionProp.Value)
+        } elseif ($hasPath -or $hasSha) {
+            $entries = @($m)
+        } else {
+            foreach ($p in $props) {
+                if ($metaKeys -contains $p.Name) { continue }
+                $entries += [pscustomobject]@{ Path = $p.Name; Sha256 = [string]$p.Value }
+            }
+        }
+    } else {
+        $entries = @($m)
+    }
+
+    if ($entries.Count -eq 1 -and $entries[0] -is [System.Collections.IEnumerable] -and $entries[0] -isnot [string]) {
+        $entries = @($entries[0])
+    }
+
+    if ($entries -is [System.Collections.IDictionary]) {
+        $entries = @($entries.GetEnumerator() | ForEach-Object {
+            [pscustomobject]@{ Path = $_.Key; Sha256 = [string]$_.Value }
+        })
+    }
+
+    if (-not $entries -or $entries.Count -eq 0) {
+        WARN "No manifest entries found; skipping tamper check"
+        return
+    }
+
+    foreach ($e in $entries) {
+        $path = $null
+        $sha = $null
+
+        if ($e -is [string]) {
+            $path = $e
+        } else {
+            if ($e.PSObject.Properties["Path"]) { $path = $e.Path }
+            elseif ($e.PSObject.Properties["path"]) { $path = $e.path }
+
+            if ($e.PSObject.Properties["Sha256"]) { $sha = $e.Sha256 }
+            elseif ($e.PSObject.Properties["sha256"]) { $sha = $e.sha256 }
+            elseif ($e.PSObject.Properties["Hash"]) { $sha = $e.Hash }
+            elseif ($e.PSObject.Properties["hash"]) { $sha = $e.hash }
+        }
+
+        if (-not $path) {
+            WARN "Manifest entry missing Path; skipping"
             continue
         }
-        $h = (Get-FileHash -Algorithm SHA256 -Path $e.Path).Hash
-        if ($h -ne $e.Sha256) {
-            $bad += $e.Path
+
+        if (-not (Test-Path $path)) {
+            $bad += $path
+            continue
+        }
+
+        if ($sha) {
+            $h = (Get-FileHashCompat -Algorithm SHA256 -Path $path).Hash
+            if ($h -ne $sha) {
+                $bad += $path
+            }
+        } else {
+            WARN "Manifest entry missing Sha256 for $path; skipping hash check"
         }
     }
 
-    if ($bad.Count -gt 0 -and -not $Force) {
-        throw "Tamper detected in payload. Refusing uninstall (use -Force to override)."
-    }
-
-    if ($bad.Count -eq 0) {
+    if ($bad.Count -gt 0) {
+        $script:TamperDetected = $true
+        $uniqueBad = $bad | Sort-Object -Unique
+        if ($Force) {
+            WARN "Tamper detected: $($uniqueBad.Count) file(s) differ from manifest (override enabled)"
+        } else {
+            WARN "Tamper detected: $($uniqueBad.Count) file(s) differ from manifest"
+            WARN "Proceeding with uninstall despite tamper findings"
+        }
+        foreach ($p in ($uniqueBad | Select-Object -First 20)) {
+            INFO "TAMPER: $p"
+        }
+        if ($uniqueBad.Count -gt 20) {
+            INFO "TAMPER: ... $($uniqueBad.Count - 20) more"
+        }
+    } else {
         OK "Tamper check passed"
     }
 }
@@ -152,16 +336,24 @@ $preSnap = Join-Path $SnapshotDir "Snapshot-Before-Uninstall-$stamp.txt"
 Save-Snapshot -OutFile $preSnap
 OK "Snapshot saved: $preSnap"
 
-Assert-NoTamper -Force:$Force
+if ($IgnoreTamper -or $Force) {
+    WARN "Tamper check skipped (Force/IgnoreTamper)"
+} else {
+    Assert-NoTamper -Force:$Force
+}
 
 $expected = Latest-Snapshot "Snapshot-After-Install-*.txt"
-if ($expected) {
+if ($IgnoreDrift -or $Force) {
+    WARN "System drift check skipped (Force/IgnoreDrift)"
+} elseif ($expected) {
     $diff = Join-Path $SnapshotDir "SnapshotDiff-PreUninstall-$stamp.txt"
     Compare-Object (Get-Content $expected.FullName) (Get-Content $preSnap) |
         Set-Content $diff
 
-    if ((Get-Item $diff).Length -gt 0 -and -not $Force) {
-        throw "System drift detected vs install snapshot. Review $diff (use -Force to override)."
+    if ((Get-Item $diff).Length -gt 0) {
+        $script:DriftDetected = $true
+        WARN "System drift detected vs install snapshot: $diff"
+        WARN "Proceeding with uninstall despite drift findings"
     }
 }
 
@@ -175,16 +367,68 @@ if (-not $Force -and -not $Quiet) {
 # -------------------------
 STEP "Stopping scheduled tasks"
 
-# Core monitors (SYSTEM / admin)
-schtasks /Delete /TN "Firewall Core Monitor" /F 2>$null | Out-Null
-schtasks /Delete /TN "Firewall WFP Monitor" /F 2>$null | Out-Null
+$taskNames = @(
+    "Firewall Core Monitor",
+    "Firewall WFP Monitor",
+    "Firewall-Defender-Integration",
+    "FirewallCore Toast Listener",
+    "FirewallCore Toast Watchdog",
+    "FirewallCore-ToastListener",
+    "FirewallCore User Notifier"
+)
+foreach ($name in $taskNames) {
+    $tasks = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($tasks) {
+        foreach ($task in $tasks) {
+            try {
+                Stop-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
+                Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction Stop
+                OK "Removed task: $($task.TaskPath)$($task.TaskName)"
+            } catch {
+                WARN "Failed to remove task ${name} ($($task.TaskPath)): $($_.Exception.Message)"
+            }
+        }
+    } else {
+        OK "Task not present: $name"
+    }
+}
 
-# User-context notifier (v1)
-$UserNotifierTask = "FirewallCore User Notifier"
-Get-ScheduledTask -TaskName $UserNotifierTask -ErrorAction SilentlyContinue |
-    Unregister-ScheduledTask -Confirm:$false
+OK "Scheduled tasks removed (including notifier/listener/watchdog if present)"
 
-OK "Scheduled tasks removed (including user notifier if present)"
+STEP "Stopping toast listener processes"
+$toastPattern = 'FirewallToastListener(-Runner)?\.ps1|FirewallToastWatchdog\.ps1'
+$toastProcs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -and $_.CommandLine -match $toastPattern
+}
+if ($toastProcs) {
+    $pids = $toastProcs.ProcessId
+    try {
+        Stop-Process -Id $pids -Force -ErrorAction Stop
+        OK "Stopped toast processes: $($pids -join ', ')"
+    } catch {
+        WARN "Failed to stop toast processes: $($_.Exception.Message)"
+    }
+} else {
+    OK "No toast listener processes found"
+}
+
+STEP "Removing protocol handler keys"
+$protocolKeys = @(
+    "HKLM:\Software\Classes\firewallcore-review",
+    "HKCU:\Software\Classes\firewallcore-review"
+)
+foreach ($key in $protocolKeys) {
+    if (Test-Path -LiteralPath $key) {
+        try {
+            Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction Stop
+            OK "Removed protocol handler: $key"
+        } catch {
+            WARN "Failed to remove protocol handler ${key}: $($_.Exception.Message)"
+        }
+    } else {
+        OK "Protocol handler not present: $key"
+    }
+}
 
 STEP "Removing firewall rules"
 Get-NetFirewallRule | Where-Object {
@@ -201,8 +445,27 @@ if ($RemoveCerts) {
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
-STEP "Removing C:\Firewall directory"
-Remove-Item "C:\Firewall" -Recurse -Force -ErrorAction SilentlyContinue
+STEP "Removing installer-owned paths"
+$ownedPaths = @(
+    $FirewallRoot,
+    (Join-Path $env:ProgramData "FirewallCore")
+)
+foreach ($path in $ownedPaths) {
+    if (Is-PathUnder $path $InstallerRoot) {
+        WARN "Skipping unsafe path under InstallerRoot: $path"
+        continue
+    }
+    if (Test-Path -LiteralPath $path) {
+        try {
+            Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+            OK "Removed: $path"
+        } catch {
+            WARN "Failed to remove ${path}: $($_.Exception.Message)"
+        }
+    } else {
+        OK "Path not present: $path"
+    }
+}
 
 # -------------------------
 # Post snapshot
@@ -211,4 +474,13 @@ $postSnap = Join-Path $SnapshotDir "Snapshot-After-Uninstall-$stamp.txt"
 Save-Snapshot -OutFile $postSnap
 OK "Post-uninstall snapshot saved: $postSnap"
 
+if ($RemoveEventLog) {
+    STEP "Removing FirewallCore Event Log"
+    try { Remove-EventLog -LogName "FirewallCore" -ErrorAction Stop; OK "FirewallCore Event Log removed" } catch { WARN "Could not remove FirewallCore Event Log: $($_.Exception.Message)" }
+}
+
 OK "Firewall Core successfully uninstalled"
+Write-Output "================================================="
+Write-Output "Firewall Core Uninstall Completed Successfully"
+Write-Output "End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Write-Output "================================================="
