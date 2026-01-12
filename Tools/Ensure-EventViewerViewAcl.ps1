@@ -1,51 +1,59 @@
 [CmdletBinding()]
 param(
-  [string[]] $ViewDirs = @(
+  [string[]]$Roots = @(
     (Join-Path $env:ProgramData "Microsoft\Event Viewer\Views"),
     (Join-Path $env:ProgramData "FirewallCore\User\Views")
   ),
-  [string] $Principal = "BUILTIN\Users",
-  [string] $Pattern = "FirewallCore*.xml",
-  [switch] $Strict
+  [string]$Pattern = "FirewallCore-*.xml",
+  [string]$Principal = "BUILTIN\Users",
+  [switch]$WhatIf,
+  [switch]$Strict
 )
 
-$ErrorActionPreference = "Stop"
+function Write-Log {
+  param([string]$Message, [ConsoleColor]$Color = [ConsoleColor]::Gray)
+  Write-Host $Message -ForegroundColor $Color
+}
 
-function Write-Info([string]$m){ Write-Host $m -ForegroundColor Cyan }
-function Write-Warn([string]$m){ Write-Host $m -ForegroundColor Yellow }
-function Write-Ok([string]$m){ Write-Host $m -ForegroundColor Green }
-function Write-Fail([string]$m){ Write-Host $m -ForegroundColor Red }
+$foundAny = $false
+$changed = 0
+$seen = 0
 
-$anyFail = $false
-
-foreach ($dir in $ViewDirs) {
-  Write-Info "=== Ensure ACL: $dir ==="
-
-  if (!(Test-Path -LiteralPath $dir)) {
-    Write-Warn "SKIP: missing dir: $dir"
+foreach ($root in $Roots) {
+  if (-not (Test-Path -LiteralPath $root)) {
+    Write-Log "SKIP: Root not found: $root" DarkGray
     continue
   }
 
-  $files = Get-ChildItem -LiteralPath $dir -File -Filter $Pattern -ErrorAction Stop
-  if (!$files -or $files.Count -eq 0) {
-    Write-Warn "No matches for $Pattern in $dir"
+  $files = Get-ChildItem -LiteralPath $root -File -Filter $Pattern -ErrorAction SilentlyContinue
+  if (-not $files) {
+    Write-Log "INFO: No matching files in: $root ($Pattern)" DarkGray
     continue
   }
 
+  $foundAny = $true
   foreach ($f in $files) {
-    try {
-      & icacls $f.FullName /grant "${Principal}:(R)" | Out-Null
-      Write-Ok ("OK  : {0}" -f $f.Name)
+    $seen++
+    Write-Log "CHECK: $($f.FullName)" Cyan
+
+    # Always grant read; icacls is idempotent enough for our use case
+    $grant = "${Principal}:(R)"
+
+    if ($WhatIf) {
+      Write-Log "WHATIF: icacls `"$($f.FullName)`" /grant `"$grant`"" Yellow
+      continue
     }
-    catch {
-      $anyFail = $true
-      Write-Fail ("FAIL: {0} :: {1}" -f $f.FullName, $_.Exception.Message)
-      if ($Strict) { throw }
-    }
+
+    & icacls $f.FullName /grant "$grant" | Out-Null
+    $changed++
+    Write-Log "OK: granted $grant" Green
   }
 }
 
-if ($anyFail -and $Strict) { throw "One or more ACL updates failed." }
+if (-not $foundAny) {
+  $msg = "No Event Viewer view files found for Pattern=$Pattern in Roots: $($Roots -join ', ')"
+  if ($Strict) { throw $msg }
+  Write-Log "WARN: $msg" Yellow
+}
 
-if ($anyFail) { Write-Warn "DONE with failures (non-strict)." }
-else { Write-Ok "DONE: all ACL updates succeeded." }
+Write-Log ("DONE: files_seen={0} grants_applied={1}" -f $seen, $changed) Green
