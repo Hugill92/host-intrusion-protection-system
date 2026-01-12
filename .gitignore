@@ -81,3 +81,7 @@ Firewall/Live/Baseline/firewall-baseline.json
 
 # local scratch/backups
 /_scratch/
+
+# Local-only docs (do not commit)
+Docs/_local/
+Docs/PROJECT_CHAT_MEMORY.md
