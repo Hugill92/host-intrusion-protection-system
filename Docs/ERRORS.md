@@ -1,37 +1,43 @@
-# Error Codes and Failure Conventions
+# Known Errors & Resolutions
 
-This project uses **Windows Installer–style exit codes** where it makes operational sense, so logs and automation map to enterprise expectations.
+This document records known installer and runtime errors encountered during development
+and the deterministic fixes applied.
 
-## Core rule
-If we fail, we fail **early** and **loudly**:
-- Print a human-readable root cause
-- Identify the phase (Preflight, Install, Repair, Uninstall, Verify, Runtime)
-- Return a meaningful exit code
+---
 
-## Common exit codes
+## Scheduled Task Creation Failure
+[unchanged]
 
-### 1600-series (installer-style)
-- **1602** — User cancelled
-- **1603** — Fatal error (generic). Only use if we *also* logged the exact root cause.
-- **1605** — Action valid only for products currently installed
-- **1618** — Another installation already in progress (use for orchestration lock contention)
-- **1620** — Package could not be opened (use when a required payload is missing/unreadable)
-- **1638** — Another version of the product is already installed
+---
 
-### Reboot semantics
-- **1641** — Reboot initiated
-- **3010** — Restart required to complete operation
+## Installer Script Not Found / Path Drift
+[unchanged]
 
-## Logging expectations (minimum)
-Every non-zero exit should log:
-- Timestamp
-- Mode (Install/Repair/Uninstall/Verify/Stop)
-- Phase
-- Root cause message
-- Exit code
+---
 
-## Scheduling guardrail (policy)
-Do not register or start scheduled tasks unless:
-- preflight passes
-- script integrity/parse checks pass
-- principals are verified (SYSTEM vs user vs service account)
+## Event Viewer View Access (Historical)
+[unchanged]
+
+---
+
+## Ghost Console Window on Review Actions
+
+**Symptom**
+- A brief PowerShell console window flashes when selecting:
+  - "Review Event Viewer Logs"
+  - "Review Logs"
+- Observed from both toast notifications and dialog boxes.
+
+**Impact**
+- Cosmetic only.
+- Does not affect log review functionality or system state.
+
+**Status**
+- Known issue.
+- Not a blocker for Sprint 1 completion.
+
+**Planned Resolution**
+- Eliminate visible console windows when invoking log review actions.
+- Ensure review actions execute fully hidden.
+
+---
