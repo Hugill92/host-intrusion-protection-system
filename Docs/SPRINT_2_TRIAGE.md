@@ -139,3 +139,30 @@ Get-CimInstance Win32_Process |
 (Get-ScheduledTask -TaskName 'FirewallCore Toast Listener' -ErrorAction SilentlyContinue).Actions
 ```
 
+
+<!-- SPRINT2_PROGRESS -->
+
+## Sprint 2 Progress (Triage Status)
+
+- Timestamp: 2026-01-12 13:03:51
+- Verification pack: all green
+
+### Completed
+- W1: PS5.1-safe scheduled task arguments (single string) - PASS
+- W2: Hidden execution + LIVE paths for toast infrastructure - PASS
+
+### Evidence (high level)
+- Scheduled tasks: Hidden execution detected and task args are a single string
+- Toast listener: scheduled task launches live scripts under `C:\Firewall\...`
+- Protocol handler: `firewallcore-review` present
+- Event Log: `FirewallCore` log exists
+- Core assets present: listener, runner, watchdog, sounds
+
+### Pending
+- W3: Uninstall completeness (Loop B) -> verify tasks/keys/files removed and idempotent
+- W4: Logging polish -> confirm no silent catches and logs contain start/end + step markers
+
+### Next Steps
+- Run Loop B (uninstall) and capture verification output (tasks removed, protocol handler removed, ProgramData cleanup, no listener processes).
+- Run Loop C (reinstall) to confirm determinism.
+

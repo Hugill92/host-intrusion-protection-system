@@ -42,3 +42,12 @@ Stability, lifecycle correctness, and execution hardening.
 ## Reference
 - `Docs/SPRINT_2_TRIAGE.md`
 
+
+<!-- SPRINT2_PROGRESS -->
+
+## Current Status
+
+- Updated: 2026-01-12 13:03:51
+- W1/W2 validated (task args PS5.1-safe + hidden execution + live paths).
+- Next validation gates: W3 (uninstall) and Loop C reinstall determinism.
+
