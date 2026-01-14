@@ -394,7 +394,7 @@ $xaml = @"
         <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
           <CheckBox Name="AutoRefresh" Content="Auto-refresh" IsChecked="True" Margin="0,0,14,0"/>
           <TextBlock Text="Interval:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-          <ComboBox Name="RefreshInterval" Width="140" SelectedIndex="2" Height="26">
+          <ComboBox Name="RefreshInterval" Width="140" SelectedIndex="1" Height="26">
             <ComboBoxItem Content="1 sec" Tag="1000"/>
             <ComboBoxItem Content="2 sec" Tag="2000"/>
             <ComboBoxItem Content="5 sec" Tag="5000"/>
@@ -481,7 +481,7 @@ $btnClose.Add_Click({
 
 # Auto-refresh timer (default 5 sec)
 $timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMilliseconds(5000)
+$timer.Interval = [TimeSpan]::FromMilliseconds(2000)
 $timer.Add_Tick({ Refresh-All })
 
 function Read-IntervalMs {
@@ -489,7 +489,7 @@ function Read-IntervalMs {
     $sel = $intervalBox.SelectedItem
     if ($sel -and $sel.Tag) { return [int]$sel.Tag }
   } catch { }
-  return 5000
+  return 2000
 }
 
 function Apply-AutoRefreshState {
@@ -514,3 +514,4 @@ Apply-AutoRefreshState
 Write-Log "Showing window"
 $win.ShowDialog() | Out-Null
 Write-Log "Window closed"
+
