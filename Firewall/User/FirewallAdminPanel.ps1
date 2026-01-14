@@ -278,7 +278,16 @@ $xaml = @"
             </DataGrid.RowStyle>
 
             <DataGrid.Columns>
-              <DataGridTextColumn Header="" Binding="{Binding Icon}" Width="50"/>
+              <DataGridTextColumn Header="" Binding="{Binding Icon}" Width="50">
+  <DataGridTextColumn.ElementStyle>
+    <Style TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe UI Emoji"/>
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </DataGridTextColumn.ElementStyle>
+</DataGridTextColumn>
 
               <DataGridTextColumn Header="Check" Binding="{Binding Check}" Width="*"/>
 
@@ -336,7 +345,16 @@ $xaml = @"
             </DataGrid.RowStyle>
 
             <DataGrid.Columns>
-              <DataGridTextColumn Header="" Binding="{Binding Icon}" Width="50"/>
+              <DataGridTextColumn Header="" Binding="{Binding Icon}" Width="50">
+  <DataGridTextColumn.ElementStyle>
+    <Style TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe UI Emoji"/>
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </DataGridTextColumn.ElementStyle>
+</DataGridTextColumn>
               <DataGridTextColumn Header="Step" Binding="{Binding Step}" Width="*"/>
               <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120">
                 <DataGridTextColumn.ElementStyle>
@@ -514,4 +532,5 @@ Apply-AutoRefreshState
 Write-Log "Showing window"
 $win.ShowDialog() | Out-Null
 Write-Log "Window closed"
+
 
