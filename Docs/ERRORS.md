@@ -68,3 +68,37 @@ This document records known issues, their impact, and sprint ownership.
 - Resolution: deterministic uninstall ordering + explicit start/end markers + post-action verification script (tasks/process/rules/profile).
 - Outcome: Clean Uninstall validated (tasks removed/missing, no toast listener processes, project-tag rules absent, owned paths removed).
 <!-- END SPRINT2_UNINSTALL_RESOLVED -->
+
+
+<!-- LOCKIN:ToastMicroFlashError BEGIN -->
+
+Periodic micro-flash (console) every few minutes
+
+Cause: Toast Watchdog spawning Toast Listener without a strict hidden launch contract, and/or Listener crash in PS5.1 due to WinRT type resolution.
+
+Fix: Patch Watchdog to fast-exit and only start Listener if not running using the hidden launch contract (powershell.exe -WindowStyle Hidden ...). Patch Listener to resolve WinRT types via ContentType=WindowsRuntime. Ensure Listener MultipleInstancesPolicy=IgnoreNew.@(
+  Get-ScheduledTaskInfo -TaskName "FirewallCore Toast Listener"
+  Get-ScheduledTaskInfo -TaskName "FirewallCore Toast Watchdog"
+) | Select-Object TaskName, LastRunTime, LastTaskResult, NextRunTime |
+  Format-Table -AutoSize
+Expected: no idle flashes and stable task results.
+<!-- LOCKIN:ToastMicroFlashError END -->
+
+
+# === LOCKIN:InstallPolicyApplyLogging BEGIN ===
+## Install policy apply visibility and verification (LOCKED)
+
+**Requirement**
+- Policy application must occur during install (before verification/tests) and must never be silent.
+
+**Evidence**
+- Policy apply output log must exist:
+  - `C:\Firewall\Logs\Install\ApplyPolicy.log`
+
+**Verification**
+```powershell
+Get-Content 'C:\Firewall\Logs\Install\ApplyPolicy.log' -Tail 80
+(Get-NetFirewallRule | Measure-Object).Count
+```
+# === LOCKIN:InstallPolicyApplyLogging END ===
+
