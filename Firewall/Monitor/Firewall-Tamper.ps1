@@ -131,7 +131,7 @@ foreach ($rule in $driftedRules) {
     if ($actor -eq "User") {
         # 🔥 Users get healed
         Start-Process -FilePath "powershell.exe" `
-            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden -File `"$Core`" -ChangedRuleName `"$rule`"" `
+            -ArgumentList "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Core`" -ChangedRuleName `"$rule`"" `
             -WindowStyle Hidden -NoNewWindow
     }
     else {

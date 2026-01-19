@@ -8,7 +8,7 @@ if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
 }
 
 if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" @args
+    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$PSCommandPath" @args
     exit $LASTEXITCODE
 }
 # =================================================================

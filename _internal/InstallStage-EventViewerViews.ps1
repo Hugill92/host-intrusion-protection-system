@@ -35,7 +35,7 @@ if ($RequireAdmin -and -not $isAdmin) {
 $argList = @()
 if ($IncludeNumberedViewXml) { $argList += "-IncludeNumberedViewXml" }
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $AclTool @argList
+& powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $AclTool @argList
 if ($LASTEXITCODE -ne 0) {
   throw "ACL tool failed with exit code $LASTEXITCODE"
 }

@@ -26,7 +26,7 @@ if (-not $Exists) {
 
     $Action = New-ScheduledTaskAction `
         -Execute "powershell.exe" `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden -File `"$ScriptPath`""
+        -Argument "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`""
 
     $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
     $Trigger.RepetitionInterval = (New-TimeSpan -Minutes 5)

@@ -264,16 +264,38 @@ Codex MUST fill this out with bullet points and file paths:
 
 ### Changes Made / Implementations Done
 - Files changed:
-  - -
+  - Firewall/User/FirewallAdminPanel.ps1 - action runner, debounced refresh, checklist grid wiring, scheduled task validation/repair, tests UI, and quick actions.
+  - _internal/Uninstall-Firewall.ps1 - KeepLogs support and ProgramData log preservation.
+  - _internal/Install-Firewall.ps1 - scheduled task action args aligned to hidden launch contract.
+  - _internal/InstallStage-EventViewerViews.ps1 - ACL tool launch updated to hidden contract.
+  - _internal/Repair-Firewall.ps1 - task/tool launches use powershell.exe with hidden contract.
+  - Firewall/Monitor/Install-FirewallUserNotifierTask.ps1 - notifier task args updated to hidden contract.
+  - Firewall/Maintenance/Install-FirewallUserNotifierTask.ps1 - notifier task args updated to hidden contract.
+  - Firewall/Monitor/Firewall-Bootstrap.ps1 - bootstrap task args updated to hidden contract.
+  - Firewall/Monitor/Install-Tamper-Protection.ps1 - tamper task args updated to hidden contract.
+  - Firewall/Installs/Install-Tamper-Protection.ps1 - self-bypass/runas args and tamper task contract updated.
+  - Firewall/Monitor/Firewall-UserNotifier.ps1 - notifier launch uses hidden contract.
+  - Firewall/Monitor/Firewall-Core.ps1 - self-bypass uses hidden contract.
+  - Firewall/Monitor/Firewall-Monitor.ps1 - self-bypass uses hidden contract.
+  - Firewall/Monitor/Firewall-BaselineMonitor.ps1 - self-heal/autoupdate launches use hidden contract.
+  - Firewall/Monitor/AutoUpdate-FirewallBaseline.ps1 - baseline update launch uses hidden contract.
+  - Firewall/Monitor/Firewall-Tamper.ps1 - self-heal Start-Process args aligned to hidden contract.
+  - Firewall/Modules/WFP-Actions.ps1 - scheduled task remove command uses hidden contract.
+  - Docs/Sprints/Sprint-3/Sprint3_Prep_AdminPanelPhaseB_RegressionPlan.md - implementation checklist section filled.
+  - Docs/PRs/PR_AdminPanel_PhaseB_Wiring.md - implementation summary updated.
 - Functions added/modified:
-  - -
+  - Firewall/User/FirewallAdminPanel.ps1 - Invoke-UiAsyncAction, Invoke-AdminPanelProcessAction, Request-UiRefresh, Initialize-UiRefreshTimer, Test-TaskActionContract, Get-ScheduledTasksHealth, Normalize-PowerShellArguments, Repair-ScheduledTaskActions, Invoke-RepairScheduledTasksAction, Invoke-RowHelpAction.
+  - _internal/Uninstall-Firewall.ps1 - KeepLogs parameter and selective ProgramData cleanup.
 - Loop fixes implemented:
-  - -
+  - Firewall/User/FirewallAdminPanel.ps1 - debounced Request-UiRefresh and busy gating prevent refresh cascades.
+  - Firewall/User/FirewallAdminPanel.ps1 - output queue processing keeps UI updates deterministic.
 - XAML wiring changes:
-  - -
+  - Firewall/User/FirewallAdminPanel.ps1 - Health/Status grid updated (action buttons, evidence), embedded Tests UI host, and actions/quick actions wiring.
 - Logging additions:
-  - -
+  - Firewall/User/FirewallAdminPanel.ps1 - AdminPanel-Actions.log now includes ISO timestamps, Result, DurationMs, Evidence, and Error fields.
+  - Firewall/User/FirewallAdminPanel.ps1 - action snapshot paths captured as evidence.
 - Notes / Known limitations:
-  - -
+  - _internal/Uninstall-Firewall.ps1 - KeepLogs preserves C:\ProgramData\FirewallCore\Logs; other ProgramData subfolders are removed.
+  - Firewall/Old/* - legacy scripts remain unchanged.
 
 END.

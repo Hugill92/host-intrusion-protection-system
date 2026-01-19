@@ -6,7 +6,7 @@ if (-not (Test-Path $Notifier)) { throw "Missing notifier script: $Notifier" }
 
 while ($true) {
     try {
-        & powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File $Notifier
+        & powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -STA -File $Notifier
     } catch {
         # never crash the wrapper
     }

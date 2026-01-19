@@ -13,7 +13,7 @@ if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
 }
 
 if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" @args
+    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$PSCommandPath" @args
     exit $LASTEXITCODE
 }
 # ---------------------------------------------------------------------
@@ -58,10 +58,10 @@ try {
     $diff = Compare-FirewallSnapshots
 
     if ($diff) {
-        Emit-FirewallSnapshotEvent `
-            -Snapshot $snap `
-            -Diff $diff `
-            -Mode ($env:FIREWALL_DEV_MODE ? "DEV" : "LIVE")
+    Emit-FirewallSnapshotEvent `
+        -Snapshot $snap `
+        -Diff $diff `
+        -Mode $(if ($env:FIREWALL_DEV_MODE -eq "1") { "DEV" } else { "LIVE" })
     }
 }
 catch {

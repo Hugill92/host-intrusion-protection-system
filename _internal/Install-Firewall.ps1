@@ -36,7 +36,10 @@ $IsAdmin = ([Security.Principal.WindowsPrincipal] `
 if (-not $IsAdmin) {
     Write-Host "[*] Elevation required. Relaunching as Administrator..."
     Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+        "-NoLogo",
         "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle","Hidden",
         "-ExecutionPolicy","Bypass",
         "-File","`"$PSCommandPath`"",
         "-Mode",$Mode
@@ -216,7 +219,7 @@ if (-not (Test-Path $DefenderScript)) {
     throw "Missing Defender integration script: $DefenderScript"
 }
 
-$ActionArgs = '-NoProfile -ExecutionPolicy AllSigned -File "{0}"' -f $DefenderScript
+$ActionArgs = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $DefenderScript
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ActionArgs
 
 $Trigger   = New-ScheduledTaskTrigger -AtStartup
@@ -379,16 +382,16 @@ try {
                 } else {
                     $a = $UserTask.Actions[0]
                     if ($a.Execute -match "powershell\.exe|pwsh\.exe") {
-                        if ($a.Arguments -notmatch "-WindowStyle\\s+Hidden") {
-                            $newArgs = $a.Arguments.Trim()
-                            # Add -WindowStyle Hidden near the front (safe)
-                            $newArgs = $newArgs -replace "^-NoProfile", "-NoProfile -WindowStyle Hidden"
-                            if ($newArgs -eq $a.Arguments) {
-                                $newArgs = "-WindowStyle Hidden " + $newArgs
-                            }
+                        $newArgs = $a.Arguments.Trim()
+                        if ($newArgs -notmatch "-NoLogo") { $newArgs = "-NoLogo " + $newArgs }
+                        if ($newArgs -notmatch "-NoProfile") { $newArgs = "-NoProfile " + $newArgs }
+                        if ($newArgs -notmatch "-NonInteractive") { $newArgs = "-NonInteractive " + $newArgs }
+                        if ($newArgs -notmatch "-ExecutionPolicy\\s+Bypass") { $newArgs = "-ExecutionPolicy Bypass " + $newArgs }
+                        if ($newArgs -notmatch "-WindowStyle\\s+Hidden") { $newArgs = "-WindowStyle Hidden " + $newArgs }
+                        if ($newArgs -ne $a.Arguments) {
                             $UserTask.Actions[0].Arguments = $newArgs
                             Set-ScheduledTask -TaskName $toastTaskName -TaskPath $UserTask.TaskPath -Action $UserTask.Actions[0] | Out-Null
-                            Write-Host "[OK] Updated listener task to run hidden: $toastTaskName"
+                            Write-Host "[OK] Updated listener task action contract: $toastTaskName"
                         }
                     }
                 }
@@ -402,7 +405,7 @@ try {
     $WatchdogScript = Join-Path $LiveSystem "FirewallToastWatchdog.ps1"
     if (Test-Path $WatchdogScript) {
         $tn = "FirewallCore Toast Watchdog"
-        $tr = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogScript`""
+        $tr = "powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WatchdogScript`""
         # Use schtasks for rock-solid minute scheduling (avoids repetition duration formatting issues)
         schtasks.exe /Create /F /TN "$tn" /SC MINUTE /MO 1 /RU "SYSTEM" /RL HIGHEST /TR "$tr" | Out-Null
         Write-Host "[OK] Watchdog task ensured: $tn"

@@ -14,7 +14,7 @@ Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue |
 
 $Action  = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Script`""
+    -Argument "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Script`""
 
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
 

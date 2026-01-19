@@ -22,7 +22,7 @@ if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
 }
 
 if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" @args
+    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$PSCommandPath" @args
     exit $LASTEXITCODE
 }
 # =================================================================
@@ -57,7 +57,10 @@ if ($IsLive) {
 
     if (-not $isAdmin) {
         Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            "-NoLogo",
             "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle", "Hidden",
             "-ExecutionPolicy", "Bypass",
             "-File", "`"$PSCommandPath`""
         )
@@ -89,6 +92,7 @@ if (-not (Test-Path $tamperCheckPath)) {
 # Scheduled task action:
 # Always calls the tamper check under SYSTEM with explicit -DevMode when in DEV.
 $argList = @(
+    "-NoLogo",
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
     "-NonInteractive",

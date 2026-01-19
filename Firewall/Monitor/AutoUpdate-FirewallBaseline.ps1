@@ -14,7 +14,7 @@ if ($ageMin -gt 10) {
 
 # Regenerate baseline
 if (Test-Path $baselineScript) {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $baselineScript -Quiet | Out-Null
+    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $baselineScript -Quiet | Out-Null
 }
 
 # Consume trust flag

@@ -53,7 +53,7 @@ function Invoke-QuarantineExe {
 
   # Optional timed removal via scheduled job (simple + reliable)
   if ($Minutes -gt 0) {
-    $removeCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"Get-NetFirewallRule -DisplayName '$base-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue`""
+    $removeCmd = "powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"Get-NetFirewallRule -DisplayName '$base-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue`""
     $tn = "WFP-UNQUARANTINE-$tag"
     & "$env:WINDIR\System32\schtasks.exe" /Delete /TN $tn /F *> $null
     & "$env:WINDIR\System32\schtasks.exe" /Create /TN $tn /SC ONCE /ST (Get-Date).AddMinutes($Minutes).ToString("HH:mm") `

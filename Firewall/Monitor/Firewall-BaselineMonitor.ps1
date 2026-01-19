@@ -37,13 +37,13 @@ while ($true) {
                     "Live-Baseline-Monitor"
 
                 if (Test-Path $SelfHealScript) {
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SelfHealScript | Out-Null
+                    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $SelfHealScript | Out-Null
                 }
 
             # ---- BENIGN DRIFT (LEARNABLE) ----
             } else {
                 if (TrustedUpdateWindow -and (Test-Path $AutoUpdateScript)) {
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $AutoUpdateScript | Out-Null
+                    powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $AutoUpdateScript | Out-Null
                     Notify "Info" "Baseline updated" `
                         "Trusted update window detected. Baseline was refreshed." `
                         "Live-Baseline-Monitor"

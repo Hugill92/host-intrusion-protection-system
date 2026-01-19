@@ -13,6 +13,7 @@ param(
     [switch]$Quiet,
     [switch]$RemoveCerts,
     [switch]$RemoveEventLog,
+    [switch]$KeepLogs,
     [string]$InstallerRoot = "C:\FirewallInstaller",
     [string]$TargetRoot,
     [switch]$IgnoreTamper,
@@ -153,6 +154,7 @@ Write-Output "TargetRootSource: $TargetRootSource"
 Write-Output "InstallerContext: $IsInstallerContext"
 Write-Output "IgnoreTamper: $IgnoreTamper"
 Write-Output "IgnoreDrift: $IgnoreDrift"
+Write-Output "KeepLogs: $KeepLogs"
 Write-Output "================================================="
 Write-Output ""
 
@@ -446,13 +448,37 @@ if ($RemoveCerts) {
 }
 
 STEP "Removing installer-owned paths"
+$programDataRoot = Join-Path $env:ProgramData "FirewallCore"
 $ownedPaths = @(
     $FirewallRoot,
-    (Join-Path $env:ProgramData "FirewallCore")
+    $programDataRoot
 )
 foreach ($path in $ownedPaths) {
     if (Is-PathUnder $path $InstallerRoot) {
         WARN "Skipping unsafe path under InstallerRoot: $path"
+        continue
+    }
+    if ($KeepLogs -and (Normalize-Path $path) -eq (Normalize-Path $programDataRoot)) {
+        if (Test-Path -LiteralPath $path) {
+            $logPath = Join-Path $path "Logs"
+            $logPathNorm = Normalize-Path $logPath
+            $children = Get-ChildItem -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            foreach ($child in $children) {
+                $childPath = $child.FullName
+                if ($logPathNorm -and (Normalize-Path $childPath) -eq $logPathNorm) {
+                    OK "Preserved logs: $logPath"
+                    continue
+                }
+                try {
+                    Remove-Item -LiteralPath $childPath -Recurse -Force -ErrorAction Stop
+                    OK "Removed: $childPath"
+                } catch {
+                    WARN "Failed to remove ${childPath}: $($_.Exception.Message)"
+                }
+            }
+        } else {
+            OK "Path not present: $path"
+        }
         continue
     }
     if (Test-Path -LiteralPath $path) {

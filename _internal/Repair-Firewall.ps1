@@ -26,7 +26,7 @@ try {
   $regTasks = Join-Path $repoRoot "Tools\Register-FirewallCoreTasks.ps1"
   if (Test-Path $regTasks) {
     Write-Host "[STEP] Register/Enable tasks (repair)..." -ForegroundColor Cyan
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $regTasks -Force | Out-Host
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $regTasks -Force | Out-Host
   } else {
     Write-Host "[WARN] Tools\Register-FirewallCoreTasks.ps1 not found; skipping task re-register step." -ForegroundColor Yellow
   }
@@ -52,7 +52,7 @@ try {
     $arch = Join-Path $repoRoot "Tools\Archive-NotifyQueue.ps1"
     if (Test-Path $arch) {
       Write-Host "[STEP] Archive notify queue (preflight)..." -ForegroundColor Cyan
-      & pwsh -NoProfile -ExecutionPolicy Bypass -File $arch | Out-Host
+      & powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $arch | Out-Host
     } else {
       Write-Host "[WARN] Tools\Archive-NotifyQueue.ps1 not found; skipping queue archive." -ForegroundColor Yellow
     }
@@ -63,7 +63,7 @@ try {
     $apply = Join-Path $repoRoot "Install\Apply-FirewallPolicy.ps1"
     if (-not (Test-Path $apply)) { throw "Missing policy apply script: $apply" }
     $out = Join-Path $logDir "ApplyPolicy_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss")
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $apply -CaptureBundle -AllowUnverified 1> $out 2>&1
+    & powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $apply -CaptureBundle -AllowUnverified 1> $out 2>&1
     Write-Host ("[OK] Policy apply log: {0}" -f $out) -ForegroundColor Green
   }
 

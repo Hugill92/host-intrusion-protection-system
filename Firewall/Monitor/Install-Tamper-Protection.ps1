@@ -22,7 +22,10 @@ if (-not (Test-Path $ScriptPath)) {
 }
 
 $argString = @(
+  "-NoLogo",
   "-NoProfile",
+  "-NonInteractive",
+  "-WindowStyle","Hidden",
   "-ExecutionPolicy","Bypass",
   "-File","`"$ScriptPath`"",
   "-Mode",$Mode
