@@ -199,3 +199,68 @@ otifyqueue_counts.json
 - Replace password-based bundle encryption with **signing key / secure unlock** integration (hardware-backed unlock).
 <!-- FIREWALLCORE_ADMINPANEL_BUNDLE_EXPORTS_20260127 END -->
 
+## System Integrity Repair (DISM + SFC)
+
+Purpose:
+Provide a deterministic, administrator-initiated system integrity repair workflow using native Windows tooling.
+
+Implementation:
+- Single CMD utility
+- Execution order: DISM RestoreHealth → SFC /scannow
+- Supports Online (default) and Offline image repair
+
+Artifacts:
+- Human-readable log
+- Machine-readable JSON result
+- Output directory:
+  C:\Windows\Logs\SystemRepair\
+
+Security & Ops:
+- Requires Administrator privileges
+- No PowerShell dependency
+- Compatible with AllSigned environments
+- Safe for WinRE and offline servicing
+- Deterministic exit codes and structured output
+
+Planned Integration:
+- FirewallCore v2 Diagnostics Bundle
+- Admin Panel action: System Integrity Repair
+- Optional pre/post health correlation
+- Optional signature/hash enforcement in signed execution paths
+## System Integrity Repair (DISM + SFC)
+
+Purpose:
+Provide a deterministic, administrator-initiated system integrity repair workflow using native Windows tooling.
+
+Implementation:
+- Single CMD utility
+- Execution order: DISM RestoreHealth → SFC /scannow
+- Supports Online (default) and Offline image repair
+
+Artifacts:
+- Human-readable log
+- Machine-readable JSON result
+- Output directory:
+  C:\Windows\Logs\SystemRepair\
+
+Security & Ops:
+- Requires Administrator privileges
+- No PowerShell dependency
+- Compatible with AllSigned environments
+- Safe for WinRE and offline servicing
+- Deterministic exit codes and structured output
+
+Planned Integration:
+- FirewallCore v2 Diagnostics Bundle
+- Admin Panel action: System Integrity Repair
+- Optional pre/post health correlation
+- Optional signature/hash enforcement in signed execution paths
+
+## REGOPT V2 Architectural Decision
+
+- Registry Optimization promoted to V2
+- Single PowerShell entry point: RegOpt-Runner.ps1
+- CMD reduced to optional launcher only
+- Apply and Verify scripts are internal workers
+- Preview vs Apply execution contract locked
+- Ready for Admin Panel Phase B integration

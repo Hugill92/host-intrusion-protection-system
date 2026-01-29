@@ -190,3 +190,19 @@ This replaces ad-hoc tuning with a **repeatable, logged, and reversible** mechan
 - Desktop summary is generated only when run in user context (non-SYSTEM)
 - Designed for later enforcement under **ExecutionPolicy=AllSigned** (Sprint 4+)
 
+### System Integrity Repair (DISM + SFC)
+- Admin-initiated system repair capability
+- Supports online and offline Windows images
+- Deterministic DISM → SFC execution order
+- Structured JSON output for automation
+- Integrated into Diagnostics Bundle
+- Exposed via Admin Panel (Maintenance Mode)
+
+### V2 – Registry Optimization Engine (REGOPT)
+- Completed: V1 logic validated
+- Completed: Deterministic logging
+- Completed: Desktop and ProgramData traceability
+- Completed: Single entry point architecture
+- Planned: Rollback snapshot
+- Planned: Drift detection
+- Planned: Authenticode enforcement
