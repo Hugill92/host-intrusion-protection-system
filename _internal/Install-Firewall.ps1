@@ -131,6 +131,80 @@ Write-Host "[INSTALL] Registering FirewallCore event log..." -ForegroundColor Cy
 Write-Host "[INSTALL] FirewallCore event log ready." -ForegroundColor Green
 
 # ============================================================
+# BEGIN FIREWALL POLICY APPLY (deterministic, installer-owned)
+# Stages + applies FirewallCore policy on every install and
+# captures PRE/POST baselines w/ SHA256 for auditability.
+# ============================================================
+try {
+    $ProgramDataRoot = 'C:\ProgramData\FirewallCore'
+    $PolicyDst       = Join-Path $ProgramDataRoot 'Policy\FirewallCorePolicy.wfw'
+    $BaselineRoot    = Join-Path $ProgramDataRoot 'Baselines'
+    $stamp           = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+    # Candidate policy sources (repo may vary by layout)
+    $candidates = @(
+        'C:\FirewallInstaller\Firewall\Policy\FirewallCorePolicy.wfw',
+        'C:\FirewallInstaller\Firewall\Policy\FirewallCorePolicy.wfw'.Replace('FirewallInstaller','FirewallInstaller'), # no-op safety
+        'C:\FirewallInstaller\FirewallCorePolicy.wfw',
+        (Join-Path (Split-Path -Parent $PSScriptRoot) 'Firewall\Policy\FirewallCorePolicy.wfw'),
+        (Join-Path (Split-Path -Parent $PSScriptRoot) 'FirewallCorePolicy.wfw')
+    ) | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -Unique
+
+    $PolicySrc = $null
+    foreach ($c in $candidates) {
+        try {
+            $p = (Resolve-Path $c -ErrorAction SilentlyContinue)
+            if ($p) { $PolicySrc = $p.Path; break }
+        } catch {}
+    }
+
+    if (-not $PolicySrc -or -not (Test-Path $PolicySrc)) {
+        throw "Missing FirewallCore policy file. Expected one of: $($candidates -join ', ')"
+    }
+
+    # Stage policy into ProgramData (runtime-owned)
+    New-Item -ItemType Directory -Path (Split-Path -Parent $PolicyDst) -Force | Out-Null
+    Copy-Item $PolicySrc $PolicyDst -Force
+
+    # Safety gate: refuse tiny/empty policy
+    if ((Get-Item $PolicyDst).Length -lt 10240) {
+        throw "Policy file too small — refusing to apply. Path: $PolicyDst"
+    }
+
+    Write-Host "[OK] FirewallCore policy staged: $PolicyDst"
+
+    # PRE baseline
+    $PreDir = Join-Path $BaselineRoot ("PRE_INSTALL_{0}" -f $stamp)
+    New-Item -ItemType Directory -Path $PreDir -Force | Out-Null
+
+    $PreFile = Join-Path $PreDir 'Firewall_PRE.wfw'
+    netsh advfirewall export $PreFile | Out-Null
+    Get-FileHash $PreFile -Algorithm SHA256 | Out-File ($PreFile + '.sha256') -Encoding ascii
+    Write-Host "[OK] PRE firewall baseline captured: $PreFile"
+
+    # Apply policy (deterministic enforcement)
+    Write-Host "[INSTALL] Applying FirewallCore policy..."
+    netsh advfirewall import $PolicyDst | Out-Null
+    Write-Host "[OK] FirewallCore policy applied"
+
+    # POST baseline
+    $PostDir = Join-Path $BaselineRoot ("POST_INSTALL_{0}" -f $stamp)
+    New-Item -ItemType Directory -Path $PostDir -Force | Out-Null
+
+    $PostFile = Join-Path $PostDir 'Firewall_POST.wfw'
+    netsh advfirewall export $PostFile | Out-Null
+    Get-FileHash $PostFile -Algorithm SHA256 | Out-File ($PostFile + '.sha256') -Encoding ascii
+    Write-Host "[OK] POST firewall baseline captured: $PostFile"
+
+} catch {
+    Write-Host ("[FATAL] Firewall policy apply failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    throw
+}
+# ============================================================
+# END FIREWALL POLICY APPLY
+# ============================================================
+
+# ============================================================
 # CERTIFICATE
 # ============================================================
 Write-Host "[CERT] Checking trusted certificate" -ForegroundColor Cyan
@@ -156,11 +230,9 @@ if (-not (Test-Path $DefenderScript)) {
     throw "Missing Defender integration script: $DefenderScript"
 }
 
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @(
-    "-NoProfile",
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ( @("-NoLogo","-NoProfile","-NonInteractive","-WindowStyle","Hidden",
     "-ExecutionPolicy","AllSigned",
-    "-File","`"$DefenderScript`""
-)
+    "-File","`"$DefenderScript`"") -join " " )
 
 $Trigger   = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
@@ -182,10 +254,8 @@ Write-Host "[OK] Scheduled task registered: Firewall-Defender-Integration" -Fore
 $ToastScript = Join-Path $FirewallRoot "User\FirewallToastListener.ps1"
 
 if (Test-Path $ToastScript) {
-    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @(
-        "-STA","-NoProfile","-ExecutionPolicy","Bypass",
-        "-File","`"$ToastScript`""
-    )
+    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ( @("-NoLogo","-STA","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-ExecutionPolicy","Bypass",
+        "-File","`"$ToastScript`"") -join " " )
 
     $ToastTrigger   = New-ScheduledTaskTrigger -AtLogOn
     $ToastPrincipal = New-ScheduledTaskPrincipal `
@@ -291,3 +361,35 @@ try {
 }
 # --- END FIREWALLCORE TOAST SELFHEAL INFRA ---
 
+
+
+
+
+
+
+# SIG # Begin signature block
+# MIIEbgYJKoZIhvcNAQcCoIIEXzCCBFsCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
+# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUf7B+doTXd60Vf3DEXdEynFRD
+# aT+gggK1MIICsTCCAZmgAwIBAgIUA+POe3D7qmANSWS/liNWJ/XK6bEwDQYJKoZI
+# hvcNAQELBQAwJzElMCMGA1UEAwwcRmlyZXdhbGxDb3JlIE9mZmxpbmUgUm9vdCBD
+# QTAeFw0yNjAyMDMwNzU1NTdaFw0yOTAzMDkwNzU1NTdaMFgxCzAJBgNVBAYTAlVT
+# MREwDwYDVQQLDAhTZWN1cml0eTEVMBMGA1UECgwMRmlyZXdhbGxDb3JlMR8wHQYD
+# VQQDDBZGaXJld2FsbENvcmUgU2lnbmF0dXJlMFkwEwYHKoZIzj0CAQYIKoZIzj0D
+# AQcDQgAExBZAuSDtDbNMz5nbZx6Xosv0IxskeV3H2I8fMI1YTGKMmeYMhml40QQJ
+# wbEbG0i9e9pBd3TEr9tCbnzSOUpmTKNvMG0wCQYDVR0TBAIwADALBgNVHQ8EBAMC
+# B4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwHQYDVR0OBBYEFKm7zYv3h0UWScu5+Z98
+# 7l7v7EjsMB8GA1UdIwQYMBaAFCwozIRNrDpNuqmNvBlZruA6sHoTMA0GCSqGSIb3
+# DQEBCwUAA4IBAQCbL4xxsZMbwFhgB9cYkfkjm7yymmqlcCpnt4RwF5k2rYYFlI4w
+# 8B0IBaIT8u2YoNjLLtdc5UXlAhnRrtnmrGhAhXTMois32SAOPjEB0Fr/kjHJvddj
+# ow7cBLQozQtP/kNQQyEj7+zgPMO0w65i5NNJkopf3+meGTZX3oHaA8ng2CvJX/vQ
+# ztgEa3XUVPsGK4F3HUc4XpJAbPSKCeKn16JDr7tmb1WazxN39iIhT25rgYM3Wyf1
+# XZHgqADpfg990MnXc5PCf8+1kg4lqiEhdROxmSko4EKfHPTHE3FteWJuDEfpW8p9
+# /gooBjq5fPZc4TMppuq4+r0m70jJpdgBEIB9MYIBIzCCAR8CAQEwPzAnMSUwIwYD
+# VQQDDBxGaXJld2FsbENvcmUgT2ZmbGluZSBSb290IENBAhQD4857cPuqYA1JZL+W
+# I1Yn9crpsTAJBgUrDgMCGgUAoHgwGAYKKwYBBAGCNwIBDDEKMAigAoAAoQKAADAZ
+# BgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgELMQ4wDAYKKwYB
+# BAGCNwIBFTAjBgkqhkiG9w0BCQQxFgQUMUFOsAO1MVAwBhjQawj9aalihO4wCwYH
+# KoZIzj0CAQUABEcwRQIgNPk4F7Bu+XIAHwtrqPIesLDrRqDjIdfvhDogn7vvcSoC
+# IQDT3H+FoOhq9iAvAXHq8fXx1hrg2koP6Zbe9Ca4Cyxcog==
+# SIG # End signature block
