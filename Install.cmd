@@ -35,3 +35,4 @@ if %INSTALL_EXIT% NEQ 0 (
     echo [FATAL] Core install failed with exit code %INSTALL_EXIT%
     exit /b %INSTALL_EXIT%
 )
+
