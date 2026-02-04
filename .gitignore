@@ -98,7 +98,16 @@ Firewall/Policy/*.README.txt
 %LOG%/
 LAUNCH_PROOF.txt
 Install-Debug.cmd
+_internal/*
+!_internal/Install-FirewallCore.ps1
+# Local-only
+.codex/
+.vscode/
+*.code-workspace
+%LOG%/
+Tools/Baselines/
 _internal/
+
 
 # Release cert materials must never be committed
 Tools/Release/Certs/
