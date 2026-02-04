@@ -106,7 +106,6 @@ _internal/*
 *.code-workspace
 %LOG%/
 Tools/Baselines/
-_internal/
 
 
 # Release cert materials must never be committed
