@@ -15,3 +15,9 @@
 *.json text eol=lf
 *.yml  text eol=lf
 *.yaml text eol=lf
+
+# FirewallCore policy artifacts are canonical and must not be modified casually.
+# Keep them binary, no diff noise, no EOL normalization.
+Firewall/Policy/*.wfw -text -diff
+Firewall/Policy/*.json text eol=lf
+Firewall/Policy/*.txt  text eol=lf
