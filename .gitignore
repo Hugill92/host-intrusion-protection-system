@@ -83,7 +83,6 @@ Docs/_local/
 _offline/
 Firewall/Diff/
 # Firewall policy exports + hashes (generated artifacts)
-Firewall/Policy/*.wfw
 Firewall/Policy/*.SHA256.txt
 Firewall/Policy/*.README.txt
 # Corrupt/backup artifacts
