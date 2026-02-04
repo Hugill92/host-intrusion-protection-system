@@ -179,3 +179,19 @@ This module must export:
 - `Test-FirewallBaselineManifest`
 
 All scripts (installer, uninstallers, snapshot tools) must import this module rather than embedding copies of these functions.
+
+---
+
+## Addendum — No Dupes (Required Shared Module)
+
+### Shared helper module (required)
+To prevent duplicate functions, implement baseline fingerprint/hash/manifest logic **once** in:
+
+- `Tools/Modules/FirewallBaseline.psm1`
+
+This module must export:
+- `Get-FwRuleFingerprint`
+- `New-FirewallBaselineManifest`
+- `Test-FirewallBaselineManifest`
+
+All scripts (installer, uninstallers, snapshot tools) must import this module rather than embedding copies of these functions.
