@@ -93,3 +93,13 @@ Firewall/Policy/*.README.txt
 **/*.old_*
 # Accidental temp files
 **/new 1.txt*
+# --- Local-only / dev artifacts (do not commit) ---
+.codox/
+%LOG%/
+LAUNCH_PROOF.txt
+Install-Debug.cmd
+_internal/
+
+# Release cert materials must never be committed
+Tools/Release/Certs/
+
