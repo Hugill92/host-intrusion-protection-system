@@ -1,6 +1,11 @@
-# Install-Firewall.ps1
+﻿# Install-Firewall.ps1
 # One-shot installer for Firewall Core system
 # MUST be run as admin (auto-elevates)
+
+# --- DEPRECATED ENTRYPOINT GUARD (temporary) ---
+throw "DEPRECATED: Use Install.cmd (which calls Install-FirewallCore.ps1). This file will be archived later."
+
+
 
 param(
     [ValidateSet("DEV","LIVE")]
@@ -8,11 +13,16 @@ param(
 )
 
 # --- Ensure FirewallCore Event Log ---
-$log = "FirewallCore"
+$InstallerEventLogName = "FirewallCore"
+$InstallerEventSource  = "FirewallCore-Installer"
 
-if (-not [System.Diagnostics.EventLog]::Exists($log)) {
-    New-EventLog -LogName $log -Source "FirewallCore"
-    New-EventLog -LogName $log -Source "FirewallCore-Pentest"
+$sources = @("FirewallCore","FirewallCore-Pentest",$InstallerEventSource)
+foreach ($src in $sources) {
+    try {
+        if (-not [System.Diagnostics.EventLog]::SourceExists($src)) {
+            New-EventLog -LogName $InstallerEventLogName -Source $src
+        }
+    } catch {}
 }
 
 
@@ -30,9 +40,9 @@ $IsAdmin = ([Security.Principal.WindowsPrincipal] `
 
 if (-not $IsAdmin) {
     Write-Host "[*] Elevation required. Relaunching as Administrator..."
-    Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+    Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -ArgumentList (
         "-NoProfile",
-        "-ExecutionPolicy","Bypass",
+        "-ExecutionPolicy","AllSigned",
         "-File","`"$PSCommandPath`"",
         "-Mode",$Mode
     )
@@ -85,6 +95,18 @@ trap {
 
 Start-Transcript -Path $LogFile -Append | Out-Null
 
+function Write-InstallerEvent {
+    param(
+        [Parameter(Mandatory)][int]$EventId,
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet("Information","Warning","Error")]
+        [string]$EntryType = "Information"
+    )
+    try {
+        Write-EventLog -LogName $InstallerEventLogName -Source $InstallerEventSource -EventId $EventId -EntryType $EntryType -Message $Message
+    } catch {}
+}
+
 Write-Output "================================================="
 Write-Output "Firewall Core Installation Started"
 Write-Output "Time      : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -95,7 +117,7 @@ Write-Output "Elevated  : True"
 Write-Output "================================================="
 Write-Output ""
 
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy AllSigned -Force
 
 Write-Host "[*] Starting Firewall Core installation..." -ForegroundColor Cyan
 
@@ -132,14 +154,41 @@ Write-Host "[INSTALL] FirewallCore event log ready." -ForegroundColor Green
 
 # ============================================================
 # BEGIN FIREWALL POLICY APPLY (deterministic, installer-owned)
-# Stages + applies FirewallCore policy on every install and
-# captures PRE/POST baselines w/ SHA256 for auditability.
+# Stages + applies FirewallCore policy on every install.
 # ============================================================
 try {
     $ProgramDataRoot = 'C:\ProgramData\FirewallCore'
     $PolicyDst       = Join-Path $ProgramDataRoot 'Policy\FirewallCorePolicy.wfw'
     $BaselineRoot    = Join-Path $ProgramDataRoot 'Baselines'
     $stamp           = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+    # PRE baseline capture (must happen BEFORE any policy import / rule changes)
+    $preHelper = Join-Path $InstallerRoot "Tools\\Baselines\\Ensure-PreInstallBaseline.ps1"
+    Write-InstallerEvent -EventId 1100 -Message "BASELINE PRECAPTURE START" -EntryType Information
+
+    try {
+        if (-not (Test-Path -LiteralPath $preHelper)) {
+            throw "Missing helper: $preHelper"
+        }
+
+        Write-Host "[INSTALL] Capturing PREINSTALL baseline..." -ForegroundColor Cyan
+        $pre = & $preHelper -ProgramDataRoot $ProgramDataRoot
+
+        if ($pre -and $pre.BaselinePath) {
+            Write-Host ("[OK] PREINSTALL baseline ready: {0}" -f $pre.BaselinePath) -ForegroundColor Green
+        }
+
+        if ($pre -and $pre.Created) {
+            Write-InstallerEvent -EventId 1108 -Message ("BASELINE PRECAPTURE OK | path={0}" -f $pre.BaselinePath) -EntryType Information
+        } else {
+            $reason = if ($pre -and $pre.Reason) { $pre.Reason } else { "baseline-exists" }
+            Write-InstallerEvent -EventId 1103 -Message ("BASELINE PRECAPTURE NO-OP | reason={0} | path={1}" -f $reason, $pre.BaselinePath) -EntryType Information
+        }
+    } catch {
+        $msg = "BASELINE PRECAPTURE FAIL | {0}" -f $_.Exception.Message
+        Write-InstallerEvent -EventId 1901 -Message $msg -EntryType Error
+        throw
+    }
 
     # Candidate policy sources (repo may vary by layout)
     $candidates = @(
@@ -168,19 +217,10 @@ try {
 
     # Safety gate: refuse tiny/empty policy
     if ((Get-Item $PolicyDst).Length -lt 10240) {
-        throw "Policy file too small — refusing to apply. Path: $PolicyDst"
+        throw "Policy file too small - refusing to apply. Path: $PolicyDst"
     }
 
     Write-Host "[OK] FirewallCore policy staged: $PolicyDst"
-
-    # PRE baseline
-    $PreDir = Join-Path $BaselineRoot ("PRE_INSTALL_{0}" -f $stamp)
-    New-Item -ItemType Directory -Path $PreDir -Force | Out-Null
-
-    $PreFile = Join-Path $PreDir 'Firewall_PRE.wfw'
-    netsh advfirewall export $PreFile | Out-Null
-    Get-FileHash $PreFile -Algorithm SHA256 | Out-File ($PreFile + '.sha256') -Encoding ascii
-    Write-Host "[OK] PRE firewall baseline captured: $PreFile"
 
     # Apply policy (deterministic enforcement)
     Write-Host "[INSTALL] Applying FirewallCore policy..."
@@ -254,7 +294,7 @@ Write-Host "[OK] Scheduled task registered: Firewall-Defender-Integration" -Fore
 $ToastScript = Join-Path $FirewallRoot "User\FirewallToastListener.ps1"
 
 if (Test-Path $ToastScript) {
-    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ( @("-NoLogo","-STA","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-ExecutionPolicy","Bypass",
+    $ToastAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ( @("-NoLogo","-STA","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-ExecutionPolicy","AllSigned",
         "-File","`"$ToastScript`"") -join " " )
 
     $ToastTrigger   = New-ScheduledTaskTrigger -AtLogOn
@@ -344,7 +384,7 @@ try {
     $WatchdogScript = Join-Path $LiveSystem "FirewallToastWatchdog.ps1"
     if (Test-Path $WatchdogScript) {
         $tn = "FirewallCore Toast Watchdog"
-        $tr = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogScript`""
+        $tr = "powershell.exe -NoProfile -ExecutionPolicy AllSigned -WindowStyle Hidden -File `"$WatchdogScript`""
         # Use schtasks for rock-solid minute scheduling (avoids repetition duration formatting issues)
         schtasks.exe /Create /F /TN "$tn" /SC MINUTE /MO 1 /RU "SYSTEM" /RL HIGHEST /TR "$tr" | Out-Null
         Write-Host "[OK] Watchdog task ensured: $tn"
@@ -368,28 +408,29 @@ try {
 
 
 # SIG # Begin signature block
-# MIIEbgYJKoZIhvcNAQcCoIIEXzCCBFsCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
-# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUf7B+doTXd60Vf3DEXdEynFRD
-# aT+gggK1MIICsTCCAZmgAwIBAgIUA+POe3D7qmANSWS/liNWJ/XK6bEwDQYJKoZI
-# hvcNAQELBQAwJzElMCMGA1UEAwwcRmlyZXdhbGxDb3JlIE9mZmxpbmUgUm9vdCBD
-# QTAeFw0yNjAyMDMwNzU1NTdaFw0yOTAzMDkwNzU1NTdaMFgxCzAJBgNVBAYTAlVT
-# MREwDwYDVQQLDAhTZWN1cml0eTEVMBMGA1UECgwMRmlyZXdhbGxDb3JlMR8wHQYD
-# VQQDDBZGaXJld2FsbENvcmUgU2lnbmF0dXJlMFkwEwYHKoZIzj0CAQYIKoZIzj0D
-# AQcDQgAExBZAuSDtDbNMz5nbZx6Xosv0IxskeV3H2I8fMI1YTGKMmeYMhml40QQJ
-# wbEbG0i9e9pBd3TEr9tCbnzSOUpmTKNvMG0wCQYDVR0TBAIwADALBgNVHQ8EBAMC
-# B4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwHQYDVR0OBBYEFKm7zYv3h0UWScu5+Z98
-# 7l7v7EjsMB8GA1UdIwQYMBaAFCwozIRNrDpNuqmNvBlZruA6sHoTMA0GCSqGSIb3
-# DQEBCwUAA4IBAQCbL4xxsZMbwFhgB9cYkfkjm7yymmqlcCpnt4RwF5k2rYYFlI4w
-# 8B0IBaIT8u2YoNjLLtdc5UXlAhnRrtnmrGhAhXTMois32SAOPjEB0Fr/kjHJvddj
-# ow7cBLQozQtP/kNQQyEj7+zgPMO0w65i5NNJkopf3+meGTZX3oHaA8ng2CvJX/vQ
-# ztgEa3XUVPsGK4F3HUc4XpJAbPSKCeKn16JDr7tmb1WazxN39iIhT25rgYM3Wyf1
-# XZHgqADpfg990MnXc5PCf8+1kg4lqiEhdROxmSko4EKfHPTHE3FteWJuDEfpW8p9
-# /gooBjq5fPZc4TMppuq4+r0m70jJpdgBEIB9MYIBIzCCAR8CAQEwPzAnMSUwIwYD
-# VQQDDBxGaXJld2FsbENvcmUgT2ZmbGluZSBSb290IENBAhQD4857cPuqYA1JZL+W
-# I1Yn9crpsTAJBgUrDgMCGgUAoHgwGAYKKwYBBAGCNwIBDDEKMAigAoAAoQKAADAZ
-# BgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgELMQ4wDAYKKwYB
-# BAGCNwIBFTAjBgkqhkiG9w0BCQQxFgQUMUFOsAO1MVAwBhjQawj9aalihO4wCwYH
-# KoZIzj0CAQUABEcwRQIgNPk4F7Bu+XIAHwtrqPIesLDrRqDjIdfvhDogn7vvcSoC
-# IQDT3H+FoOhq9iAvAXHq8fXx1hrg2koP6Zbe9Ca4Cyxcog==
+# MIIElAYJKoZIhvcNAQcCoIIEhTCCBIECAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDPNP5FzG7F1PFI
+# qjuehGjaQo7d54+0IL2XfnsET39VaKCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
+# bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
+# NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
+# DAxGaXJld2FsbENvcmUxHzAdBgNVBAMMFkZpcmV3YWxsQ29yZSBTaWduYXR1cmUw
+# WTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEFkC5IO0Ns0zPmdtnHpeiy/QjGyR5
+# XcfYjx8wjVhMYoyZ5gyGaXjRBAnBsRsbSL172kF3dMSv20JufNI5SmZMo28wbTAJ
+# BgNVHRMEAjAAMAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNV
+# HQ4EFgQUqbvNi/eHRRZJy7n5n3zuXu/sSOwwHwYDVR0jBBgwFoAULCjMhE2sOk26
+# qY28GVmu4DqwehMwDQYJKoZIhvcNAQELBQADggEBAJsvjHGxkxvAWGAH1xiR+SOb
+# vLKaaqVwKme3hHAXmTathgWUjjDwHQgFohPy7Zig2Msu11zlReUCGdGu2easaECF
+# dMyiKzfZIA4+MQHQWv+SMcm912OjDtwEtCjNC0/+Q1BDISPv7OA8w7TDrmLk00mS
+# il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
+# u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
+# KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
+# ggE1MIIBMQIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
+# b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
+# CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
+# AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
+# IPwgXnjWKlGhe3MShAJVtK9yWtHVvjT+7as4YmmmUqRQMAsGByqGSM49AgEFAARI
+# MEYCIQDTnnuzb8a8enuGeqUcpiX3eJbjO4vb38cMj1gD/MZUNgIhAOm8jwdzal18
+# z/1JhngjbjBpgTXJENMvRbsTk+0vzco2
 # SIG # End signature block

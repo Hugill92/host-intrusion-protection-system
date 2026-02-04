@@ -1,329 +1,183 @@
 <#
 .SYNOPSIS
-  Ensure a PREINSTALL baseline exists under ProgramData.
+  Ensures a PREINSTALL firewall baseline exists (or is created).
 
 .DESCRIPTION
-  Creates baseline folder PREINSTALL_YYYYMMDD_HHMMSS with:
+  Creates (or verifies) a baseline bundle under:
+    <ProgramDataRoot>\Baselines\PREINSTALL_YYYYMMDD_HHMMSS\
+
+  Required artifacts:
     - Firewall-Policy.wfw
     - Firewall-Policy.json
-    - Firewall-Policy.thc (optional/placeholder if not implemented yet)
-    
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-- SHA256SUMS.txt + BaselineManifest.json (deterministic hashing evidence)
+    - Firewall-Policy.thc (stub until generator exists)
+    - FirewallBaseline.manifest.sha256.json
 
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Must be called BEFORE applying any FirewallCore rules/policy.
-
-.RETURNS
-  PSCustomObject:
-    Created (bool)
-    
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-BaselinePath (string)
-    
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Reason (string)
-
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
+  Uses Tools/Modules/FirewallBaseline.psm1 for:
+    - Fingerprint
+    - Manifest generation
+    - Manifest verification
 #>
 
-[CmdletBinding()
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-]
+[CmdletBinding()]
 param(
-  [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string]$ProgramDataRoot = "C:\ProgramData\FirewallCore",
+  [string]$ProgramDataRoot = "C:\ProgramData\FirewallCore",
   [switch]$Force
 )
 
-
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+$PSNativeCommandUseErrorActionPreference = $true
 
-function New-Timestamp { Get-Date -Format "yyyyMMdd_HHmmss" }
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$baselineModule = Join-Path $repoRoot "Tools\\Modules\\FirewallBaseline.psm1"
+Import-Module $baselineModule -Force
 
-function Get-Sha256Hex {
-  param([Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string]$Path)
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-.Hash.ToLowerInvariant()
-
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+  throw "Ensure-PreInstallBaseline must be run elevated (Administrator)."
 }
 
-function Write-Sha256Sums {
-  param(
-    [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string]$Folder,
-    [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string[]]$Files
-  )
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-$out = Join-Path $Folder "SHA256SUMS.txt"
+$baselineRoot = Join-Path $ProgramDataRoot "Baselines"
+New-Item -ItemType Directory -Path $baselineRoot -Force | Out-Null
 
-  $lines = New-Object System.Collections.Generic.List[string]
-  foreach ($f in $Files) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-{
-    $p = Join-Path $Folder $f
-    if (-not (Test-Path $p)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-{ throw ("Hash target missing: " + $p) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-}
-    $h = Get-Sha256Hex -Path $p
-    $lines.Add(("{0}  {1}" -f $h, $f)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
+$requiredFiles = @(
+  "Firewall-Policy.wfw",
+  "Firewall-Policy.json",
+  "Firewall-Policy.thc",
+  "FirewallBaseline.manifest.sha256.json"
 )
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
+
+function Test-RequiredBaselineFiles {
+  param([Parameter(Mandatory)][string]$Dir)
+
+  foreach ($name in $requiredFiles) {
+    $p = Join-Path $Dir $name
+    if (-not (Test-Path -LiteralPath $p)) {
+      throw ("Required baseline file missing: {0}" -f $p)
+    }
+
+    if ($name -like "*.wfw" -or $name -like "*.json" -or $name -like "*.thc") {
+      $len = (Get-Item -LiteralPath $p).Length
+      if ($len -le 0) {
+        throw ("Required baseline file is empty: {0}" -f $p)
+      }
+    }
+  }
 }
 
-  $lines | Set-Content -Path $out -Encoding ASCII
-  return $out
+function Get-LatestExistingPreinstallBaseline {
+  $dirs = Get-ChildItem -LiteralPath $baselineRoot -Directory -Filter "PREINSTALL_*" -ErrorAction SilentlyContinue
+  if (-not $dirs) { return $null }
+  return ($dirs | Sort-Object LastWriteTime -Descending | Select-Object -First 1)
 }
 
-function Write-Manifest {
-  param(
-    [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string]$Folder,
-    [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][hashtable]$Meta,
-    [Parameter(Mandatory)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-][string[]]$Files
-  )
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-$manifestPath = Join-Path $Folder "BaselineManifest.json"
-
-  $items = @()
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-foreach ($f in $Files) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-{
-    $p = Join-Path $Folder $f
-    $fi = Get-Item -LiteralPath $p
-    $items += [pscustomobject]@{
-      Name   = $f
-      Bytes  = [int64]$fi.Length
-      Sha256 = (Get-Sha256Hex -Path $p)
-    
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-}
+$existing = Get-LatestExistingPreinstallBaseline
+if ($existing -and -not $Force) {
+  Test-RequiredBaselineFiles -Dir $existing.FullName
+  $verify = Test-FirewallBaselineManifest -BaselineDir $existing.FullName -InventoryJsonName "Firewall-Policy.json"
+  if (-not $verify.Ok) {
+    throw ("Existing PREINSTALL baseline failed verification: {0}" -f (($verify.Failures -join "; ")))
   }
 
-  $obj = [ordered]@{
-    Type      = $Meta.Type
-    CreatedAt = $Meta.CreatedAt
-    Computer  = $Meta.Computer
-    User      = $Meta.User
-    Notes     = $Meta.Notes
-    Files     = $items
-  }
-
-  ($obj | ConvertTo-Json -Depth 8) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-| Set-Content -Path $manifestPath -Encoding UTF8
-  return $manifestPath
-}
-
-$baseRoot = Join-Path $ProgramDataRoot "Baselines"
-if (-not (Test-Path $baseRoot)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-{ New-Item -ItemType Directory -Force -Path $baseRoot | Out-Null }
-
-# Detect existing PREINSTALL baseline
-$existing = Get-ChildItem $baseRoot -Directory -ErrorAction SilentlyContinue |
-  Where-Object { $_.Name -like "PREINSTALL_*" } |
-  Sort-Object LastWriteTime -Desc |
-  Select-Object -First 1
-
-if ($existing -and -not $Force) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-{
   return [pscustomobject]@{
-    Created      = $false
-    BaselinePath = $existing.FullName
-    Reason       = "baseline-exists"
+    Created       = $false
+    BaselinePath  = $existing.FullName
+    Reason        = "baseline-exists"
+    Verification  = $verify
   }
 }
 
-$bundle = Join-Path $baseRoot ("PREINSTALL_{0}" -f (New-Timestamp)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-)
+$stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$bundleDir = Join-Path $baselineRoot ("PREINSTALL_{0}" -f $stamp)
+New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+$wfwPath  = Join-Path $bundleDir "Firewall-Policy.wfw"
+$jsonPath = Join-Path $bundleDir "Firewall-Policy.json"
+$thcPath  = Join-Path $bundleDir "Firewall-Policy.thc"
 
-$wfw  = Join-Path $bundle "Firewall-Policy.wfw"
-$json = Join-Path $bundle "Firewall-Policy.json"
-$thc  = Join-Path $bundle "Firewall-Policy.thc"
+# 1) Export authoritative firewall policy (WFAS)
+& netsh advfirewall export $wfwPath | Out-Null
+if (-not (Test-Path -LiteralPath $wfwPath)) { throw "Firewall export did not produce output: $wfwPath" }
+if ((Get-Item -LiteralPath $wfwPath).Length -le 0) { throw "Firewall export produced empty file: $wfwPath" }
 
-# 1) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Export authoritative firewall policy
-# TODO (Codex)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-: replace placeholder with project-authoritative export (netsh or WFAS export)
-
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-"TODO: export firewall policy" | Set-Content -Path $wfw -Encoding UTF8
-
-# 2) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Write inventory JSON (minimum viable)
-
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-$meta = @{
-  Type      = "PREINSTALL"
-  CreatedAt = (Get-Date)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-.ToString("o")
-  
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Computer  = $env:COMPUTERNAME
-  User      = $env:USERNAME
-  Notes     = "THC may be stubbed until generator is wired; export method may be placeholder until replaced."
+# 2) Inventory JSON (includes Rules[] for deterministic fingerprinting)
+$rules = Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop
+$ruleRecords = foreach ($r in $rules) {
+  [pscustomobject]@{
+    DisplayName = [string]$r.DisplayName
+    Direction   = [string]$r.Direction
+    Action      = [string]$r.Action
+    Enabled     = [string]$r.Enabled
+    Profile     = [string]$r.Profile
+    Group       = if ($null -eq $r.Group) { "" } else { [string]$r.Group }
+  }
 }
 
-($meta | ConvertTo-Json -Depth 6) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-| Set-Content -Path $json -Encoding UTF8
+$warnings = New-Object System.Collections.Generic.List[string]
+$warnings.Add("THC artifact is currently a stub (generator not wired).")
 
-# 3) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-THC (optional)
+$inventory = [ordered]@{
+  Type      = "PREINSTALL"
+  CreatedAt = (Get-Date).ToString("o")
+  Computer  = $env:COMPUTERNAME
+  User      = $env:USERNAME
+  Export    = [ordered]@{
+    Method = "netsh advfirewall export"
+    File   = "Firewall-Policy.wfw"
+  }
+  RuleCount = $ruleRecords.Count
+  Rules     = $ruleRecords
+  Warnings  = @($warnings)
+}
 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-# TODO (Codex)
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-: if THC generator exists, call it. Otherwise keep stub and ensure uninstall logs WARN.
-"TODO: thc artifact" | Set-Content -Path $thc -Encoding UTF8
+($inventory | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 
-# 4) 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-Deterministic hashing evidence inside the bundle
-$files = @("Firewall-Policy.wfw","Firewall-Policy.json","Firewall-Policy.thc")
+# 3) THC artifact (stub for now)
+"THC artifact stub (generator not wired yet)." | Set-Content -LiteralPath $thcPath -Encoding UTF8
 
-$here = Split-Path -Parent $(\System.Management.Automation.InvocationInfo.MyCommand.Path)
-$repo = Split-Path -Parent $(Split-Path -Parent $here)
-Import-Module (Join-Path $repo 'Tools\Modules\FirewallBaseline.psm1') -Force
-$null = Write-Sha256Sums -Folder $bundle -Files $files
-$null = Write-Manifest   -Folder $bundle -Meta $meta -Files $files
+# 4) Manifest + verification
+$filesForManifest = @("Firewall-Policy.wfw","Firewall-Policy.json","Firewall-Policy.thc")
+$manifestPath = New-FirewallBaselineManifest -BaselineDir $bundleDir -Files $filesForManifest -Type "PREINSTALL" -PolicyStore "ActiveStore" -Warnings @($warnings) -InventoryJsonName "Firewall-Policy.json"
+
+Test-RequiredBaselineFiles -Dir $bundleDir
+$verifyNew = Test-FirewallBaselineManifest -BaselineDir $bundleDir -InventoryJsonName "Firewall-Policy.json"
+if (-not $verifyNew.Ok) {
+  throw ("New PREINSTALL baseline failed verification: {0}" -f (($verifyNew.Failures -join "; ")))
+}
 
 return [pscustomobject]@{
-  Created      = $true
-  BaselinePath = $bundle
-  Reason       = "created"
+  Created       = $true
+  BaselinePath  = $bundleDir
+  Reason        = "created"
+  ManifestPath  = $manifestPath
+  Verification  = $verifyNew
 }
 
+# SIG # Begin signature block
+# MIIElAYJKoZIhvcNAQcCoIIEhTCCBIECAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBKgoaPPp/EuN51
+# vr+xdg+CCMYRbpDelVaV/2U223lZ2qCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
+# bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
+# NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
+# DAxGaXJld2FsbENvcmUxHzAdBgNVBAMMFkZpcmV3YWxsQ29yZSBTaWduYXR1cmUw
+# WTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEFkC5IO0Ns0zPmdtnHpeiy/QjGyR5
+# XcfYjx8wjVhMYoyZ5gyGaXjRBAnBsRsbSL172kF3dMSv20JufNI5SmZMo28wbTAJ
+# BgNVHRMEAjAAMAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNV
+# HQ4EFgQUqbvNi/eHRRZJy7n5n3zuXu/sSOwwHwYDVR0jBBgwFoAULCjMhE2sOk26
+# qY28GVmu4DqwehMwDQYJKoZIhvcNAQELBQADggEBAJsvjHGxkxvAWGAH1xiR+SOb
+# vLKaaqVwKme3hHAXmTathgWUjjDwHQgFohPy7Zig2Msu11zlReUCGdGu2easaECF
+# dMyiKzfZIA4+MQHQWv+SMcm912OjDtwEtCjNC0/+Q1BDISPv7OA8w7TDrmLk00mS
+# il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
+# u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
+# KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
+# ggE1MIIBMQIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
+# b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
+# CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
+# AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
+# IO+oEB+0FgQAMAY8u4XQBLH+rIX9jvUY8DuotA7lbD1oMAsGByqGSM49AgEFAARI
+# MEYCIQCAlpUVRzShR9fhscAlqVKUbD4POrvwDo4hPc153mCdAAIhANmRheOncGsd
+# 5RlkInBclY6ocoa2ouXQpKa0VFJ6WNhS
+# SIG # End signature block

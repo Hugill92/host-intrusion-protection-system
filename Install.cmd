@@ -1,31 +1,37 @@
-@echo off
-setlocal EnableExtensions
+REM ==========================================================
+REM STEP 1 - CORE INSTALL (baseline-aware, deterministic)
+REM ==========================================================
 
-title Firewall Core Installer
+set "BASELINE_ROOT=%ProgramData%\FirewallCore\Baselines"
+set "PREINSTALL_BASELINE="
+set "FWCORE_BASELINE_MODE=Capture"
 
-REM Always run from repo root
-cd /d "%~dp0"
+REM Detect existing PREINSTALL baseline (first match wins)
+for /d %%D in ("%BASELINE_ROOT%\PREINSTALL_*") do (
+    set "PREINSTALL_BASELINE=%%D"
+    set "FWCORE_BASELINE_MODE=No-Op"
+    goto :baseline_checked
+)
 
-REM --- Step 1: Core install (policy/baselines/tasks/etc) ---
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "_internal\Install-Firewall.ps1"
+:baseline_checked
+if /i "%FWCORE_BASELINE_MODE%"=="No-Op" (
+    echo [INFO] PREINSTALL baseline already exists
+    echo [INFO] BaselineMode=No-Op enforced by installer
+)
+
+REM Sanitize PowerShell module path (PS5 only, AllSigned safe)
+set "PSModulePath=%SystemRoot%\System32\WindowsPowerShell\v1.0\Modules"
+
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" ^
+ -NoLogo -NoProfile -NonInteractive ^
+ -ExecutionPolicy AllSigned ^
+ -File "%~dp0_internal\Install-FirewallCore.ps1" ^
+ -Mode LIVE ^
+ -BaselineMode %FWCORE_BASELINE_MODE%
+
 set "INSTALL_EXIT=%ERRORLEVEL%"
 
-if not "%INSTALL_EXIT%"=="0" (
-  echo [FATAL] Core install failed with exit code %INSTALL_EXIT%
-  exit /b %INSTALL_EXIT%
+if %INSTALL_EXIT% NEQ 0 (
+    echo [FATAL] Core install failed with exit code %INSTALL_EXIT%
+    exit /b %INSTALL_EXIT%
 )
-
-REM --- Step 2: User notifier task (required) ---
-echo Installing Firewall User Notifier scheduled task...
-
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Firewall\Installs\Install-FirewallUserNotifierTask.ps1"
-set "NOTIFY_EXIT=%ERRORLEVEL%"
-
-if not "%NOTIFY_EXIT%"=="0" (
-  echo [FATAL] Failed to install Firewall User Notifier task (exit %NOTIFY_EXIT%)
-  exit /b %NOTIFY_EXIT%
-) else (
-  echo [OK] Firewall User Notifier task installed
-)
-
-exit /b 0

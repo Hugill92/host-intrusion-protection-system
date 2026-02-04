@@ -106,3 +106,16 @@ Tools/Release/Certs/
 .codox/
 %LOG%/
 
+# VS Code local settings
+.vscode/
+*.code-workspace
+
+# Codex / AI tooling artifacts
+.codex/
+
+# Local logs / temp artifacts
+%LOG%
+*.log
+
+# Scratch / recovery files
+*.broken
