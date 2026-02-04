@@ -27,3 +27,10 @@
 ## Determinism Notes
 - Empty scripts (<4 bytes) must contain a stub comment to be signable.
 - If signatures do not persist, normalize encoding to UTF-8 and re-sign.
+## Sprint 3 — Installer Signoff
+- LIVE install signoff complete:
+  - Deterministic INSTALL START / INSTALL NOOP events
+  - Transcript artifacts produced per run
+  - Authenticode signatures verify as Valid
+- Installer is locked on main; future work proceeds under uninstall artifacts.
+
