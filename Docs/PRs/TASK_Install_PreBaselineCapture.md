@@ -125,3 +125,41 @@ After code changes:
 - [ ] Event IDs wired (1100/1108/1103/1901)
 - [ ] Scripts re-signed with A33 and verified Valid
 - [ ] Acceptance tests executed and evidence captured
+
+---
+
+## Addendum — Baseline Manifest + Verifier (Mirror Snapshot Pattern)
+
+### Manifest naming (required)
+Inside each PREINSTALL baseline folder, write:
+
+- `FirewallBaseline.manifest.sha256.json`
+
+This should mirror the repo’s existing “manifest.sha256.json” concept used by snapshot tooling (portable, deterministic, machine-verifiable).
+
+### Manifest minimum fields (required)
+Include at minimum:
+- `Type` = `PREINSTALL`
+- `CreatedAt` (ISO 8601)
+- `Computer`, `User`
+- `Files[]`: `{ Name, Bytes, Sha256 }` for:
+  - `Firewall-Policy.wfw`
+  - `Firewall-Policy.json`
+  - `Firewall-Policy.thc` (real or stub)
+- `FirewallFingerprint`: `{ PolicyStore, Count, Sha256 }`
+  - Fingerprint must be deterministic and based on firewall rule fields (DisplayName, Direction, Action, Enabled, Profile, Group), sorted and SHA256’d (see existing Get-FwRuleFingerprint pattern).
+
+### Verifier function (required)
+Implement a helper verifier:
+- `Test-FirewallBaselineManifest -BaselineDir <path>`
+
+Verifier must:
+1) Load `FirewallBaseline.manifest.sha256.json`
+2) Recompute SHA256 for each file and compare
+3) Recompute firewall fingerprint and compare
+4) Return a structured object `{ Ok, Failures[], Details }` and allow installer to FAIL deterministically when verification fails.
+
+### THC artifact note
+“.thc” is treated as an end-to-end proof artifact:
+- If generator exists, produce real file
+- Else write stub + record warning flag in manifest (do not fail PRE baseline solely due to missing generator yet)
