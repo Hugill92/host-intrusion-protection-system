@@ -6,6 +6,12 @@
 - ✅ Installer signoff (LIVE) complete: deterministic behavior, repeatable logs, and safe NO-OP confirmed.
 - 🔒 Installer is now locked on main (no further changes unless regression forces a critical fix).
 
+
+## Signing (Sprint 3)
+- Hardware-backed Authenticode signing finalized and validated.
+- Installer artifacts sign and verify **Status=Valid** using the locked signing certificate.
+- Signing behavior validated end-to-end (including unplug-key failure test).
+- Signing is considered **part of Sprint 3 completion** and is locked with the installer.
 ## What’s now guaranteed (Install)
 ### Deterministic Event Log telemetry
 - \INSTALL START\ emitted on entry.
@@ -38,3 +44,4 @@
 
 ## Repo hygiene decision
 - Sprint notes must live on main under Docs\Sprints\Sprint-* so sprint history is visible without digging through branches.
+
