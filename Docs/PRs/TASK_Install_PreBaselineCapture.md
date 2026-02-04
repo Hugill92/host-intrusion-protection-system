@@ -163,3 +163,19 @@ Verifier must:
 “.thc” is treated as an end-to-end proof artifact:
 - If generator exists, produce real file
 - Else write stub + record warning flag in manifest (do not fail PRE baseline solely due to missing generator yet)
+
+---
+
+## Addendum — No Dupes (Required Shared Module)
+
+### Shared helper module (required)
+To prevent duplicate functions, implement baseline fingerprint/hash/manifest logic **once** in:
+
+- `Tools/Modules/FirewallBaseline.psm1`
+
+This module must export:
+- `Get-FwRuleFingerprint`
+- `New-FirewallBaselineManifest`
+- `Test-FirewallBaselineManifest`
+
+All scripts (installer, uninstallers, snapshot tools) must import this module rather than embedding copies of these functions.
