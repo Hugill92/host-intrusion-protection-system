@@ -102,4 +102,7 @@ _internal/
 
 # Release cert materials must never be committed
 Tools/Release/Certs/
+# --- Local-only folders ---
+.codox/
+%LOG%/
 
