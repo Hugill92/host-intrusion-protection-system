@@ -1,3 +1,47 @@
+## Codex Implementation Checklist (Gate-by-Gate)
+
+### A) Preflight / Safety
+- [ ] Confirm PS5.1-only syntax (no `??`, no `.Where()`, no PS7-only features)
+- [ ] Confirm AllSigned compatibility (no self-modifying behavior)
+- [ ] Confirm admin/UAC gate hard-fails when not elevated
+- [ ] Confirm wrappers use hidden launch contract (no console flashes)
+
+### B) Baseline Restore Discovery + Import
+- [ ] Locate PRE-install baseline deterministically (ProgramData baselines folder + manifest)
+- [ ] If PRE baseline exists: import/restore firewall state from PRE
+- [ ] If PRE baseline missing: log explicit fallback behavior (no silent destructive reset)
+
+### C) POST-Uninstall Verification Exports
+- [ ] Export POST-uninstall `.wfw`
+- [ ] Export POST-uninstall `.json` inventory/metadata
+- [ ] Export end-to-end artifact (e.g., `*.thc`) if baseline workflow uses it
+- [ ] Hash all exported artifacts using the existing tamper hashing function
+
+### D) Cleanup (Default vs Clean)
+- [ ] Remove scheduled tasks (exact list + legacy aliases)
+- [ ] Remove FirewallCore-owned firewall rules by Group tags (`FirewallCorev1/v2/v3`)
+- [ ] Remove wrappers/protocol handlers/shortcuts created by FirewallCore
+- [ ] Default uninstall preserves ProgramData Logs/Baselines/Diagnostics
+- [ ] Clean uninstall purges ProgramData last (log persists until end)
+
+### E) Event Log Lifecycle
+- [ ] Default uninstall keeps FirewallCore event log history
+- [ ] Clean uninstall supports optional event log definition removal (if enabled)
+
+### F) Idempotency
+- [ ] Default uninstall rerun → NOOP (2003) without error
+- [ ] Clean uninstall rerun → NOOP (2103) without error
+
+### G) Signing / Validation
+- [ ] Strip old signature blocks (if any) before final signing
+- [ ] Re-sign with A33 cert (SHA256)
+- [ ] Verify `Get-AuthenticodeSignature` returns `Status=Valid`
+
+
+
+
+
+
 # Tasking — FirewallCore Uninstall Architecture (Default + Clean)
 
 ## Objective
@@ -199,3 +243,31 @@ Artifacts expected for export/validation:
 - [ ] Clean purge ordering verified (log persists until final step)
 - [ ] Idempotency verified (Default and Clean)
 - [ ] AllSigned execution verified
+
+---
+
+## Addendum — PRE Baseline Restore (Explicit Requirements)
+
+### Shared module requirement (no dupes)
+Uninstall must import and use:
+- `Tools/Modules/FirewallBaseline.psm1`
+
+Do not duplicate fingerprint/hash/manifest logic.
+
+### Restore decision tree (required)
+1) Discover latest PRE baseline folder:
+   - `C:\ProgramData\FirewallCore\Baselines\PREINSTALL_*` (latest by LastWriteTime)
+2) If baseline folder exists:
+   - Require `FirewallBaseline.manifest.sha256.json` to exist
+   - Run `Test-FirewallBaselineManifest` before importing
+     - If FAIL: log terminal FAIL and stop (do not apply partial restore)
+3) Import PRE baseline firewall state (authoritative)
+4) Export POST-uninstall artifacts + hash evidence (per baseline workflow)
+
+### If PRE baseline is missing
+- Must log explicit fallback behavior (no silent reset)
+- Preferred fallback: NOOP restore + continue removing only FirewallCore-owned rules/tasks/files
+- Must record reason in log/event message
+
+### If manifest exists but verification fails
+- Treat as FAIL (stop) unless running in an explicitly documented lab override mode.
