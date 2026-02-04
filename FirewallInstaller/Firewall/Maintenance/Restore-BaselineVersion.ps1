@@ -1,0 +1,51 @@
+# Restore-BaselineVersion.ps1
+param(
+  [Parameter(Mandatory)]
+  [string]$VersionStamp  # like 20260105-122233
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$StateDir  = "C:\Firewall\State"
+$GoldenDir = "C:\Firewall\Golden\Baselines"
+
+$srcBase = Join-Path $GoldenDir "baseline.v$VersionStamp"
+
+if (!(Test-Path "$srcBase.json")) { throw "Missing $srcBase.json" }
+if (!(Test-Path "$srcBase.hash")) { throw "Missing $srcBase.hash" }
+if (!(Test-Path "$srcBase.meta.json")) { throw "Missing $srcBase.meta.json" }
+
+Copy-Item "$srcBase.json"  (Join-Path $StateDir "baseline.json") -Force
+Copy-Item "$srcBase.hash"  (Join-Path $StateDir "baseline.hash") -Force
+Copy-Item "$srcBase.meta.json" (Join-Path $StateDir "baseline.meta.json") -Force
+
+Write-Host "[OK] Restored baseline version v$VersionStamp to active baseline."
+
+# SIG # Begin signature block
+# MIIEkwYJKoZIhvcNAQcCoIIEhDCCBIACAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCZPott5AOjgsB0
+# yC7oimEURNT0o6BLpPKFu/KraGGQ6qCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
+# bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
+# NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
+# DAxGaXJld2FsbENvcmUxHzAdBgNVBAMMFkZpcmV3YWxsQ29yZSBTaWduYXR1cmUw
+# WTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEFkC5IO0Ns0zPmdtnHpeiy/QjGyR5
+# XcfYjx8wjVhMYoyZ5gyGaXjRBAnBsRsbSL172kF3dMSv20JufNI5SmZMo28wbTAJ
+# BgNVHRMEAjAAMAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNV
+# HQ4EFgQUqbvNi/eHRRZJy7n5n3zuXu/sSOwwHwYDVR0jBBgwFoAULCjMhE2sOk26
+# qY28GVmu4DqwehMwDQYJKoZIhvcNAQELBQADggEBAJsvjHGxkxvAWGAH1xiR+SOb
+# vLKaaqVwKme3hHAXmTathgWUjjDwHQgFohPy7Zig2Msu11zlReUCGdGu2easaECF
+# dMyiKzfZIA4+MQHQWv+SMcm912OjDtwEtCjNC0/+Q1BDISPv7OA8w7TDrmLk00mS
+# il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
+# u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
+# KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
+# ggE0MIIBMAIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
+# b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
+# CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
+# AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
+# IDBrMuI1F+L8WbKfd4gSHHV/+eDzwAGcxjFJ9gU99au8MAsGByqGSM49AgEFAARH
+# MEUCIGE3c2da3AAAYS6PeiHC6GGdzGjSKut/WNakrMYV6w1sAiEAqCLvS9khl96l
+# 6KfuV0aEkZvzwgtvFHfWJg9mJrpxPn4=
+# SIG # End signature block

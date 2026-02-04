@@ -1,0 +1,10 @@
+﻿<QueryList>
+  <Query Id="0" Path="Application">
+    <Select Path="Application">
+      *[System[
+        Provider[@Name='FirewallCore']
+        and EventID=8401
+      ]]
+    </Select>
+  </Query>
+</QueryList>

@@ -1,0 +1,172 @@
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Threading
+
+# ---------------- Paths ----------------
+$Root = "C:\FirewallInstaller\Firewall"
+$QueueRoot = "$Root\State\NotifyQueue"
+$Pending   = Join-Path $QueueRoot "Pending"
+$Processed = Join-Path $QueueRoot "Processed"
+$Failed    = Join-Path $QueueRoot "Failed"
+
+foreach ($d in @($Pending,$Processed,$Failed)) {
+    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+}
+
+$LogName = "FirewallCore"
+
+# ---------------- Sound Map ----------------
+$SoundMap = @{
+    Info     = "C:\Windows\Media\ding.wav"
+    Warning  = "C:\Windows\Media\chimes.wav"
+    Critical = "C:\Windows\Media\chord.wav"
+}
+
+function Play-AlertSound {
+    param([string]$Severity)
+    try {
+        $wav = $SoundMap[$Severity]
+        if (-not (Test-Path $wav)) { return }
+        $p = New-Object System.Media.SoundPlayer $wav
+        $p.Load()
+        $p.PlaySync()
+        [System.Threading.Thread]::Sleep(150)
+    } catch {}
+}
+
+function Open-FilteredEventViewer {
+    param([int]$EventId)
+    $view = & "$Root\Monitor\Ensure-FirewallEventView.ps1" -EventId $EventId -LogName $LogName
+    Start-Process eventvwr.msc -ArgumentList "/v:`"$view`""
+}
+
+function Write-FirewallCoreEvent {
+    param($N)
+
+    $provider = if ($N.IsPentest) { "FirewallCore-Pentest" } else { "FirewallCore" }
+
+    switch ($N.Severity) {
+        "Critical" { $entry = "Error" }
+        "Warning"  { $entry = "Warning" }
+        default    { $entry = "Information" }
+    }
+
+    Write-EventLog `
+        -LogName $LogName `
+        -Source  $provider `
+        -EventId ([int]$N.EventId) `
+        -EntryType $entry `
+        -Message @"
+Severity: $($N.Severity)
+Pentest: $($N.IsPentest)
+TestId: $($N.TestId)
+
+$($N.Message)
+"@
+}
+
+function Show-TrayNotification {
+    param($N)
+
+    $icon = New-Object System.Windows.Forms.NotifyIcon
+    $icon.Icon = [System.Drawing.SystemIcons]::Shield
+    $icon.Visible = $true
+    $icon.BalloonTipTitle = $N.Title
+    $icon.BalloonTipText  = $N.Message
+
+    $icon.BalloonTipClicked.Add({
+        Open-FilteredEventViewer $N.EventId
+    })
+
+    # Tray balloons play their own system sound  DO NOT play custom sound here
+    $icon.ShowBalloonTip(6000)
+
+    # Keep icon alive long enough for click
+    Start-Sleep -Seconds 6
+    $icon.Dispose()
+}
+
+function Show-WarningDialog {
+    param($N)
+    Play-AlertSound Warning
+    [System.Windows.Forms.MessageBox]::Show(
+        $N.Message,
+        $N.Title,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Warning
+    ) | Out-Null
+}
+
+function Show-CriticalDialog {
+    param($N)
+    Play-AlertSound Critical
+    $r = [System.Windows.Forms.MessageBox]::Show(
+        $N.Message,
+        $N.Title,
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    )
+    if ($r -eq "OK") { Open-FilteredEventViewer $N.EventId }
+}
+
+# ---------------- Main Loop ----------------
+    try {
+        $n = Get-Content $_.FullName -Raw | ConvertFrom-Json
+
+        Write-FirewallCoreEvent $n
+        Show-TrayNotification $n
+
+        switch ($n.Severity) {
+            "Warning"  { Show-WarningDialog  $n }
+            "Critical" { Show-CriticalDialog $n }
+        }
+
+        Move-Item $_.FullName (Join-Path $Processed $_.Name) -Force
+    }
+    catch {
+        Move-Item $_.FullName (Join-Path $Failed $_.Name) -Force
+    }
+}
+
+# ---------------- MAIN PROCESSING LOOP (SAFE) ----------------
+
+$items = Get-ChildItem -Path $Pending -Filter "*.json" -File -ErrorAction SilentlyContinue
+
+foreach ($item in $items) {
+    try {
+        $n = Get-Content $item.FullName -Raw | ConvertFrom-Json
+
+        # --- Event Log ---
+        Write-FirewallCoreEvent $n
+
+        switch ($n.Severity) {
+
+            "Info" {
+                # Tray balloon allowed (Windows sound acceptable)
+                Play-AlertSound Info
+                Show-TrayNotification $n
+            }
+
+            "Warning" {
+                Play-AlertSound Warning
+                Show-WarningDialog $n
+            }
+
+            "Critical" {
+                Play-AlertSound Critical
+                Show-CriticalDialog $n
+            }
+        }
+
+        Move-Item $item.FullName (Join-Path $Processed $item.Name) -Force
+    }
+    catch {
+        Move-Item $item.FullName (Join-Path $Failed $item.Name) -Force
+    }
+}
+

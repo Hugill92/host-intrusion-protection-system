@@ -1,0 +1,31 @@
+spec:
+  canonical_doc: UNINSTALL_BEHAVIOR_CONTRACT.md
+  goal: Finalize uninstall and clean uninstall behavior, verification, and logging without changing working installer behavior.
+  constraints:
+    - Do not refactor installer logic.
+    - Do not delete FirewallCore EVTX channel.
+    - Default uninstall must preserve firewall rules.
+    - Clean uninstall must remove FirewallCore rule groups (FirewallCorev1/v2/v3).
+    - Logging failures must not abort uninstall.
+tasks:
+  - id: T1
+    title: Make file logging resilient to file locks
+    acceptance:
+      - Uninstall continues if transcript/Add-Content fails due to file lock
+      - EVTX still records final outcome
+  - id: T2
+    title: Ensure clean uninstall removes FirewallCore firewall rule groups
+    acceptance:
+      - No remaining rules match FirewallCorev1/v2/v3 after clean uninstall
+      - No non-FirewallCore rules are modified
+  - id: T3
+    title: Align verification outputs with contract
+    acceptance:
+      - Scheduled tasks removed (FirewallCore*)
+      - C:\Firewall removed
+      - ProgramData behavior matches mode (Default vs Clean)
+  - id: T4
+    title: EVTX event id continuity and message style
+    acceptance:
+      - Event IDs stay within documented ranges
+      - Messages use consistent CamelCase labels

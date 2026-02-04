@@ -1,0 +1,55 @@
+{
+  "Views": [
+    {
+      "EventId": 3001,
+      "ViewId": "View_1",
+      "ViewName": "FirewallCore - Info (3001)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore"
+    },
+    {
+      "EventId": 4001,
+      "ViewId": "View_2",
+      "ViewName": "FirewallCore - Warning (4001)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore"
+    },
+    {
+      "EventId": 9001,
+      "ViewId": "View_4",
+      "ViewName": "FirewallCore - Critical (9001)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore"
+    },
+
+    {
+      "EventId": 9200,
+      "ViewId": "View_11",
+      "ViewName": "FirewallCore - Pentest Suite (9200)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore-Pentest"
+    },
+    {
+      "EventId": 9201,
+      "ViewId": "View_21",
+      "ViewName": "FirewallCore - PT WFP Tamper (9201)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore-Pentest"
+    },
+    {
+      "EventId": 9202,
+      "ViewId": "View_22",
+      "ViewName": "FirewallCore - PT Firewall Tamper (9202)",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore-Pentest"
+    },
+
+    {
+      "EventId": 9999,
+      "ViewId": "View_99",
+      "ViewName": "FirewallCore - All Events",
+      "LogName": "FirewallCore",
+      "ProviderName": "FirewallCore"
+    }
+  ]
+}

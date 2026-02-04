@@ -1,0 +1,118 @@
+{
+  "SchemaVersion": "1.0",
+  "Generated": "2026-01-08T06:45:19Z",
+  "ModeDefaults": {
+    "DEV": {
+      "Simulated": true,
+      "AllowSkipped": true
+    },
+    "LIVE": {
+      "Simulated": false,
+      "AllowSkipped": false
+    }
+  },
+  "Categories": [
+    {
+      "Name": "CoreSnapshot",
+      "Description": "Firewall snapshot creation, hashing, and determinism",
+      "FatalByDefault": true
+    },
+    {
+      "Name": "SnapshotEvents",
+      "Description": "Snapshot event emission and severity logic",
+      "FatalByDefault": false
+    },
+    {
+      "Name": "TamperProtection",
+      "Description": "Tamper detection and scheduled task integrity",
+      "FatalByDefault": true
+    },
+    {
+      "Name": "WFP",
+      "Description": "Windows Filtering Platform integrity checks",
+      "FatalByDefault": false
+    }
+  ],
+  "Tests": [
+    {
+      "Id": "Forced-Snapshot",
+      "File": "Forced-Snapshot.ps1",
+      "Category": "CoreSnapshot",
+      "Requires": [
+        "NetFirewall"
+      ],
+      "Modes": [
+        "DEV",
+        "LIVE"
+      ],
+      "Fatal": true,
+      "Deterministic": true,
+      "ProducesArtifacts": [
+        "Snapshots/*.json",
+        "State/Logs/Forced/Forced-Snapshot_*.log"
+      ]
+    },
+    {
+      "Id": "Forced-HashCircuit",
+      "File": "Forced-HashCircuit.ps1",
+      "Category": "CoreSnapshot",
+      "Requires": [],
+      "Modes": [
+        "DEV",
+        "LIVE"
+      ],
+      "Fatal": true,
+      "Deterministic": true
+    },
+    {
+      "Id": "Forced-Snapshot-HashShortCircuit",
+      "File": "Forced-Snapshot-HashShortCircuit.ps1",
+      "Category": "CoreSnapshot",
+      "Requires": [],
+      "Modes": [
+        "DEV",
+        "LIVE"
+      ],
+      "Fatal": true,
+      "Deterministic": true
+    },
+    {
+      "Id": "Forced-Snapshot-Severity",
+      "File": "Forced-Snapshot-Severity.ps1",
+      "Category": "SnapshotEvents",
+      "Requires": [
+        "EventLog"
+      ],
+      "Modes": [
+        "DEV"
+      ],
+      "Fatal": false,
+      "Deterministic": true,
+      "Simulated": true
+    },
+    {
+      "Id": "Forced-Tamper-Protection",
+      "File": "Forced-Tamper-Protection.ps1",
+      "Category": "TamperProtection",
+      "Requires": [
+        "ScheduledTasks"
+      ],
+      "Modes": [
+        "LIVE"
+      ],
+      "Fatal": true
+    },
+    {
+      "Id": "Forced-WFP-C4",
+      "File": "Forced-WFP-C4-verification.ps1",
+      "Category": "WFP",
+      "Requires": [
+        "WFP"
+      ],
+      "Modes": [
+        "LIVE"
+      ],
+      "Fatal": false
+    }
+  ]
+}

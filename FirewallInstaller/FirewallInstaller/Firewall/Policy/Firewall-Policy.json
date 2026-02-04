@@ -1,0 +1,64 @@
+{
+  "SchemaVersion": "1.1",
+
+  "ActiveProfile": "OSAlignedLocked",
+
+  "Profiles": {
+    "OSAlignedLocked": {
+      "Description": "Windows-aligned hardened firewall baseline",
+
+      "PredefinedRules": {
+        "ExplicitlyEnabled": true,
+        "ActionEnforced": true,
+        "AllowDeletion": false,
+        "AllowCloning": false,
+        "AllowAutoHeal": false
+      },
+
+      "CustomRules": {
+        "Allowed": true,
+        "StrictOutbound": false
+      },
+
+      "SeverityModel": {
+        "DisabledRule": "WARN",
+        "EnabledBlockedRule": "PASS",
+        "ActionChanged": "WARN",
+        "RuleDeleted": "CRITICAL"
+      }
+    },
+
+    "ProjectStrict": {
+      "Available": false,
+      "Description": "Aggressive HIPS-style project ruleset",
+
+      "PredefinedRules": {
+        "ExplicitlyEnabled": true,
+        "ActionEnforced": true,
+        "AllowDeletion": true,
+        "AllowCloning": true,
+        "AllowAutoHeal": true
+      },
+
+      "CustomRules": {
+        "Allowed": true,
+        "StrictOutbound": true
+      }
+    }
+  },
+
+  "PlatformCapabilities": {
+    "RequiresWindowsPro": [
+      "GPO",
+      "AdvancedAuditPolicy",
+      "CredentialGuard",
+      "DeviceGuard"
+    ],
+
+    "FallbackForHome": {
+      "DisableNetworkDiscovery": true,
+      "DisableSharing": true,
+      "RestrictInbound": true
+    }
+  }
+}

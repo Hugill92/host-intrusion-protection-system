@@ -1,0 +1,74 @@
+﻿{
+    "3001":  {
+                 "Severity":  "Info",
+                 "View":  "FirewallCore-3001",
+                 "UI":  "Tray",
+                 "Sound":  "ding.wav"
+             },
+    "4001":  {
+                 "Severity":  "Warning",
+                 "View":  "FirewallCore-4001",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8000":  {
+                 "Severity":  "Warning",
+                 "View":  "Pentest-Suite",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8101":  {
+                 "Severity":  "Warning",
+                 "View":  "PT-Firewall-Tamper",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8201":  {
+                 "Severity":  "Warning",
+                 "View":  "PT-Privilege-Abuse",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8301":  {
+                 "Severity":  "Warning",
+                 "View":  "PT-Persistence",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8401":  {
+                 "Severity":  "Warning",
+                 "View":  "FirewallCore-Event-8401",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8501":  {
+                 "Severity":  "Warning",
+                 "View":  "PT-Silent-Failure",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "8601":  {
+                 "Severity":  "Warning",
+                 "View":  "PT-Self-Heal",
+                 "UI":  "Popup",
+                 "Sound":  "chimes.wav"
+             },
+    "9001":  {
+                 "Severity":  "Critical",
+                 "View":  "FirewallCore-9001",
+                 "UI":  "Blocking",
+                 "Sound":  "chord.wav"
+             },
+    "9201":  {
+                 "Severity":  "Critical",
+                 "View":  "9201-PT-WFP-TAMPER",
+                 "UI":  "Blocking",
+                 "Sound":  "chord.wav"
+             },
+    "9202":  {
+                 "Severity":  "Critical",
+                 "View":  "9202-PT-FW-TAMPER",
+                 "UI":  "Blocking",
+                 "Sound":  "chord.wav"
+             }
+}

@@ -1,0 +1,128 @@
+# ===== Runtime / generated artifacts (do not commit) =====
+# Logs / traces / dumps
+*.log
+*.evtx
+*.etl
+*.dmp
+*.tmp
+*transcript*
+test-results_*.json
+
+# Backup files
+*.bak
+*.bak_*
+*.old
+
+# Packaging artifacts
+*.zip
+*.msi
+
+# Per-machine runtime state
+Firewall/State/
+Firewall/Snapshots/
+Firewall/Logs/
+Firewall/DEV-Only/State/
+Firewall/Live/Baseline/firewall-baseline.json
+
+# Misc state markers
+*.flag
+*.count
+
+# ===== Secrets / keys (never commit) =====
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
+
+# Generated outputs from tests/snapshots
+install-debug.txt
+Tools/Snapshots/*.txt
+
+
+# ===== HIPS Guardrails =====
+
+# Logs / traces / dumps
+*.log
+*.evtx
+*.etl
+*.dmp
+*.tmp
+*transcript*
+test-results_*.json
+
+# Backup / artifacts
+*.bak
+*.bak_*
+*.old
+*.zip
+*.msi
+
+# Generated outputs from tests/snapshots
+install-debug.txt
+Tools/Snapshots/*.txt
+
+# Per-machine runtime state (PII lives here)
+Firewall/State/
+Firewall/Logs/
+Firewall/Snapshots/
+Firewall/DEV-Only/State/
+Firewall/Live/Baseline/firewall-baseline.json
+
+# Private keys (never commit)
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
+# Signing logs
+Tools/Logs/SignScripts_*.log
+Tools/SignScripts_*.log
+# --- Local-only / scratch / export artifacts (do not commit) ---
+Docs/_local/
+_offline/
+Firewall/Diff/
+# Firewall policy exports + hashes (generated artifacts)
+Firewall/Policy/*.SHA256.txt
+Firewall/Policy/*.README.txt
+# Corrupt/backup artifacts
+**/*.corrupt_*
+**/*.bak_*
+**/*.bad_*
+**/*.old_*
+# Accidental temp files
+**/new 1.txt*
+# --- Local-only / dev artifacts (do not commit) ---
+.codox/
+%LOG%/
+LAUNCH_PROOF.txt
+Install-Debug.cmd
+_internal/*
+!_internal/Install-FirewallCore.ps1
+# Local-only
+.codex/
+.vscode/
+*.code-workspace
+%LOG%/
+Tools/Baselines/
+
+
+# Release cert materials must never be committed
+Tools/Release/Certs/
+# --- Local-only folders ---
+.codox/
+%LOG%/
+
+# VS Code local settings
+.vscode/
+*.code-workspace
+
+# Codex / AI tooling artifacts
+.codex/
+
+# Local logs / temp artifacts
+%LOG%
+*.log
+
+# Scratch / recovery files
+*.broken
