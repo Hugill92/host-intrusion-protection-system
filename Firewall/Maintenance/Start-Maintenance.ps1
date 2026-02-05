@@ -34,6 +34,6 @@ Write-Host "[OK] Maintenance window active until $(Get-Content $tokenPath)"
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
 # IFfQk3BvmZzxtVWV36l9TNphq09zHZlEjblJEXcUFZd2MAsGByqGSM49AgEFAARH
-# MEUCIHeT4c2sBApB1iZrJpYiL9cUNTxB6y3xtDynrtppd/x3AiEAhfii/+3yFTY8
-# rp/d0DpUK0YDDbRyPvCYpSNMPZ/T2go=
+# MEUCIQC2VUyH/C7PCkoKTaWon9GghWNJGNIuZK4/cDsPLQXqWQIgfA0VjPT6Ytkp
+# Sq7N8yk+yDOrgO5ly5qR67XN20pLSj4=
 # SIG # End signature block

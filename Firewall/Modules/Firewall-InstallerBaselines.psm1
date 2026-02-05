@@ -164,6 +164,172 @@ function Export-NetshFirewallBaselineBundle {
 ("{0} *{1}" -f $h, (Split-Path -Leaf $wfw)) |
     Out-File -LiteralPath $legacySha -Encoding ascii
 
+  # ------------------------------------------------------------
+  # JSON INVENTORY (deterministic rule + filter snapshot)
+  # ------------------------------------------------------------
+  $jsonName = if ($Type -eq 'PRE_INSTALL') { 'Firewall_PRE.rules.json' } else { 'Firewall_POST.rules.json' }
+  $json = Join-Path $dir $jsonName
+
+  $items = @()
+  try {
+    $rules = Get-NetFirewallRule -ErrorAction Stop | Sort-Object -Property Name
+    foreach ($r in $rules) {
+
+      $app  = $null
+      $port = $null
+      $addr = $null
+      $svc  = $null
+      $it   = $null
+      $sec  = $null
+
+      try { $app  = Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $port = Get-NetFirewallPortFilter        -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $addr = Get-NetFirewallAddressFilter     -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $svc  = Get-NetFirewallServiceFilter     -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $it   = Get-NetFirewallInterfaceTypeFilter -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $sec  = Get-NetFirewallSecurityFilter    -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+
+      $items += [pscustomobject]@{
+        Name        = $r.Name
+        DisplayName = $r.DisplayName
+        Group       = $r.Group
+        Enabled     = $r.Enabled.ToString()
+        Profile     = $r.Profile.ToString()
+        Direction   = $r.Direction.ToString()
+        Action      = $r.Action.ToString()
+
+        # Common rule toggles
+        EdgeTraversalPolicy = $r.EdgeTraversalPolicy.ToString()
+        InterfaceAlias      = $r.InterfaceAlias
+        InterfaceType       = if ($it) { $it.InterfaceType.ToString() } else { $null }
+
+        # Filters
+        Program     = if ($app)  { $app.Program } else { $null }
+        Package     = if ($app)  { $app.Package } else { $null }
+        Service     = if ($svc)  { $svc.Service } else { $null }
+
+        Protocol    = if ($port) { $port.Protocol.ToString() } else { $null }
+        LocalPort   = if ($port) { $port.LocalPort } else { $null }
+        RemotePort  = if ($port) { $port.RemotePort } else { $null }
+        IcmpType    = if ($port) { $port.IcmpType } else { $null }
+        IcmpCode    = if ($port) { $port.IcmpCode } else { $null }
+
+        LocalAddress  = if ($addr) { $addr.LocalAddress } else { $null }
+        RemoteAddress = if ($addr) { $addr.RemoteAddress } else { $null }
+
+        # Policy metadata
+        PolicyStoreSource       = $r.PolicyStoreSource
+        PolicyStoreSourceType   = $r.PolicyStoreSourceType.ToString()
+
+        # Security filter (where available)
+        Authentication = if ($sec) { $sec.Authentication.ToString() } else { $null }
+        Encryption     = if ($sec) { $sec.Encryption.ToString() } else { $null }
+      }
+    }
+  } catch {
+    # If cmdlets unavailable (rare), still emit a file to keep bundle structure consistent
+    $items = @([pscustomobject]@{ Error = $_.Exception.Message })
+  }
+
+  $payload = [pscustomobject]@{
+    Type  = $Type
+    Mode  = $Mode
+    Stamp = $Stamp
+    CapturedLocal = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
+    TimeZone = [TimeZoneInfo]::Local.StandardName
+    RuleCount = $items.Count
+    Rules = $items
+  }
+
+  $payload | ConvertTo-Json -Depth 8 | Out-File -LiteralPath $json -Encoding UTF8
+
+  $jsonSha = $json + '.sha256'
+  $jh = Get-FirewallCoreSha256Hex -LiteralPath $json
+  ("{0} *{1}" -f $jh, (Split-Path -Leaf $json)) | Out-File -LiteralPath $jsonSha -Encoding ascii
+
+  # ------------------------------------------------------------
+  # JSON INVENTORY (deterministic rule + filter snapshot)
+  # ------------------------------------------------------------
+  $jsonName = if ($Type -eq 'PRE_INSTALL') { 'Firewall_PRE.rules.json' } else { 'Firewall_POST.rules.json' }
+  $json = Join-Path $dir $jsonName
+
+  $items = @()
+  try {
+    $rules = Get-NetFirewallRule -ErrorAction Stop | Sort-Object -Property Name
+    foreach ($r in $rules) {
+
+      $app  = $null
+      $port = $null
+      $addr = $null
+      $svc  = $null
+      $it   = $null
+      $sec  = $null
+
+      try { $app  = Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $port = Get-NetFirewallPortFilter        -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $addr = Get-NetFirewallAddressFilter     -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $svc  = Get-NetFirewallServiceFilter     -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $it   = Get-NetFirewallInterfaceTypeFilter -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+      try { $sec  = Get-NetFirewallSecurityFilter    -AssociatedNetFirewallRule $r -ErrorAction Stop } catch { }
+
+      $items += [pscustomobject]@{
+        Name        = $r.Name
+        DisplayName = $r.DisplayName
+        Group       = $r.Group
+        Enabled     = $r.Enabled.ToString()
+        Profile     = $r.Profile.ToString()
+        Direction   = $r.Direction.ToString()
+        Action      = $r.Action.ToString()
+
+        # Common rule toggles
+        EdgeTraversalPolicy = $r.EdgeTraversalPolicy.ToString()
+        InterfaceAlias      = $r.InterfaceAlias
+        InterfaceType       = if ($it) { $it.InterfaceType.ToString() } else { $null }
+
+        # Filters
+        Program     = if ($app)  { $app.Program } else { $null }
+        Package     = if ($app)  { $app.Package } else { $null }
+        Service     = if ($svc)  { $svc.Service } else { $null }
+
+        Protocol    = if ($port) { $port.Protocol.ToString() } else { $null }
+        LocalPort   = if ($port) { $port.LocalPort } else { $null }
+        RemotePort  = if ($port) { $port.RemotePort } else { $null }
+        IcmpType    = if ($port) { $port.IcmpType } else { $null }
+        IcmpCode    = if ($port) { $port.IcmpCode } else { $null }
+
+        LocalAddress  = if ($addr) { $addr.LocalAddress } else { $null }
+        RemoteAddress = if ($addr) { $addr.RemoteAddress } else { $null }
+
+        # Policy metadata
+        PolicyStoreSource       = $r.PolicyStoreSource
+        PolicyStoreSourceType   = $r.PolicyStoreSourceType.ToString()
+
+        # Security filter (where available)
+        Authentication = if ($sec) { $sec.Authentication.ToString() } else { $null }
+        Encryption     = if ($sec) { $sec.Encryption.ToString() } else { $null }
+      }
+    }
+  } catch {
+    # If cmdlets unavailable (rare), still emit a file to keep bundle structure consistent
+    $items = @([pscustomobject]@{ Error = $_.Exception.Message })
+  }
+
+  $payload = [pscustomobject]@{
+    Type  = $Type
+    Mode  = $Mode
+    Stamp = $Stamp
+    CapturedLocal = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
+    TimeZone = [TimeZoneInfo]::Local.StandardName
+    RuleCount = $items.Count
+    Rules = $items
+  }
+
+  $payload | ConvertTo-Json -Depth 8 | Out-File -LiteralPath $json -Encoding UTF8
+
+  $jsonSha = $json + '.sha256'
+  $jh = Get-FirewallCoreSha256Hex -LiteralPath $json
+  ("{0} *{1}" -f $jh, (Split-Path -Leaf $json)) | Out-File -LiteralPath $jsonSha -Encoding ascii
+
 
   $manifestPath = $null
   $sumsPath = $null
@@ -172,7 +338,9 @@ function Export-NetshFirewallBaselineBundle {
   try {
     $relFiles = @(
       (Split-Path -Leaf $wfw),
-      (Split-Path -Leaf $legacySha)
+      (Split-Path -Leaf $legacySha),
+      (Split-Path -Leaf $json),
+      (Split-Path -Leaf $jsonSha)
     )
 
     $sumsPath = Write-FwBaselineSha256Sums -Root $dir -Files $relFiles -OutFile (Join-Path $dir 'SHA256SUMS.txt')
@@ -198,6 +366,8 @@ function Export-NetshFirewallBaselineBundle {
     Dir          = $dir
     WfwPath      = $wfw
     LegacySha256 = $legacySha
+    JsonPath     = $json
+    JsonLegacySha256 = $jsonSha
     Sha256Sums   = $sumsPath
     Manifest     = $manifestPath
     ManifestOk   = $verifyOk
@@ -262,8 +432,8 @@ Export-ModuleMember -Function Invoke-FirewallCorePolicyApplyWithBaselines
 # SIG # Begin signature block
 # MIIEkwYJKoZIhvcNAQcCoIIEhDCCBIACAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCApS/6+VQ5/EZKY
-# M5kk3E9d0rO6jbCePpTcQuN06tlm6KCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCALTyTTUyP9vf/B
+# k2ecTzrCHKJmMkDgL1wYE7AdUWsmkaCCArUwggKxMIIBmaADAgECAhQD4857cPuq
 # YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
 # bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
 # NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
@@ -282,7 +452,8 @@ Export-ModuleMember -Function Invoke-FirewallCorePolicyApplyWithBaselines
 # b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# IMymASEKPpoEzSov2pSFDtIlk61s2NnFpJjNi4CL7xetMAsGByqGSM49AgEFAARH
-# MEUCIQCwD1MV0zBI3/bIVryOwPGnOat1KdGDbxCv+6BfJ/v3pgIgb9HiiMVM742B
-# j7GHighAsCj1ixOABIJ1F0cF60i00XQ=
+# IFSZRrhRWscHzj1tYvAVFFYn4+NRLTInQSmdeXAdBxO7MAsGByqGSM49AgEFAARH
+# MEUCIQCJv0JHoccQWK40B/eECyiYtaOMsigQBk+ioz3jNFTa4wIgfgrgwbI8CAxS
+# rZJEYN3N/fvISlNcj1+ceqYl/DSMCX4=
 # SIG # End signature block
+

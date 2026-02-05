@@ -16,7 +16,7 @@ Write-Host "[OK] 4688 process attribution enabled (best-effort)."
 # Firewall logging (pfirewall.log)
 Write-Host "[*] Enabling Windows Firewall logging (pfirewall.log)..."
 Set-NetFirewallProfile -Profile Domain,Private,Public `
-  -LogAllowed $false -LogBlocked $true `
+  -LogAllowed True -LogBlocked True `
   -LogFileName "%systemroot%\system32\LogFiles\Firewall\pfirewall.log" `
   -LogMaxSizeKilobytes 16384
 
@@ -37,10 +37,10 @@ try {
 Write-Host "[DONE] Defender integration configured."
 
 # SIG # Begin signature block
-# MIIElAYJKoZIhvcNAQcCoIIEhTCCBIECAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# MIIEkgYJKoZIhvcNAQcCoIIEgzCCBH8CAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCCcDBv4mSFxLThl
-# BesW4H0kj1Siypsg4AInsMLEkITIcqCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCANnxaNdd5Rfxhx
+# wNVxcAF3LKeEtejXw+Gzin+Y73AKu6CCArUwggKxMIIBmaADAgECAhQD4857cPuq
 # YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
 # bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
 # NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
@@ -55,11 +55,11 @@ Write-Host "[DONE] Defender integration configured."
 # il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
 # u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
 # KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
-# ggE1MIIBMQIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
+# ggEzMIIBLwIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
 # b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# IJd7RayBzkK3e6LKysQs0Eb2B5Km44X8PzPDbbc88L2iMAsGByqGSM49AgEFAARI
-# MEYCIQDh9UAqhH9rsB4C6VvgR0+veGWluRg2w/t0TvHoDjAXJwIhAIfueZeN8V4N
-# nMEAynCA8sPnFu47o7lgXntJNDFMMqWW
+# IH/I0OvsnYmhRFBARn+ZhvUQdT3REW2/TxyQJY+j1NmrMAsGByqGSM49AgEFAARG
+# MEQCIDwqtwc+/e9kwR9apft+Fr+RsHcUmPlI3v5qh3keCvp3AiB8K0RU8xOXY+t0
+# T1k+JGpJJouUnkdZGg0iEacOyi6qDQ==
 # SIG # End signature block

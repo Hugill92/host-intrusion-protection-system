@@ -7,17 +7,6 @@ param(
   [string]$Mode = 'LIVE'
 )
 
-# Ensure the Certificate PSDrive exists (PS5.1 AllSigned-safe).
-function Ensure-CertProvider {
-    try { Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue } catch {}
-    try {
-        if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
-            New-PSDrive -Name Cert -PSProvider Certificate -Root "\" -Scope Global | Out-Null
-        }
-    } catch {}
-}
-
-
 # --- Bootstrap logging (PS5.1-safe, AllSigned friendly) ---
 if (-not (Get-Command auditLog -ErrorAction SilentlyContinue)) {
   function auditLog {
@@ -26,13 +15,15 @@ if (-not (Get-Command auditLog -ErrorAction SilentlyContinue)) {
       [Parameter(Mandatory=$true )][string]$Message
     )
     try {
+
       $line = ('[{0}] {1}' -f $Level.ToUpperInvariant(), $Message)
       if ($script:AuditLogPath) {
         $dir = Split-Path -Parent $script:AuditLogPath
         if ($dir -and -not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
         Add-Content -Path $script:AuditLogPath -Value $line -Encoding UTF8
       }
-    } catch {
+    }
+catch {
       # Last resort: avoid breaking install due to logging.
     }
   }
@@ -66,35 +57,47 @@ $script:__TranscriptStarted = $false
 
 function Stop-TranscriptSafe {
     if (-not $script:__TranscriptStarted) { return }
-    try { Stop-Transcript | Out-Null } catch {}
+    try {
+ Stop-Transcript | Out-Null }
+catch {}
 }
 
 function Initialize-InstallerAuditLog {
-    try { New-Item -ItemType Directory -Path $InstallerAuditDir -Force | Out-Null } catch {}
     try {
+ New-Item -ItemType Directory -Path $InstallerAuditDir -Force | Out-Null }
+catch {}
+    try {
+
         if (-not (Test-Path -LiteralPath $InstallerAuditFile)) {
             New-Item -ItemType File -Path $InstallerAuditFile -Force | Out-Null
         }
-    } catch {}
+    }
+catch {}
     try {
+
 Start-Transcript -Path $InstallerTranscriptFile -Append | Out-Null
         $script:__TranscriptStarted = $true
-    } catch {}
+    }
+catch {}
 }
 
 function Write-InstallerAuditLine {
     param([Parameter(Mandatory=$true)][string]$Line)
     try {
+
         Add-Content -LiteralPath $InstallerAuditFile -Value $Line -Encoding Unicode
-    } catch {}
+    }
+catch {}
 }
 
 function Ensure-InstallerEventSource {
     try {
+
         if (-not [System.Diagnostics.EventLog]::SourceExists($InstallerEventSource)) {
             New-EventLog -LogName $InstallerEventLogName -Source $InstallerEventSource
         }
-    } catch {}
+    }
+catch {}
 }
 
 function Write-InstallerEvent {
@@ -105,8 +108,34 @@ function Write-InstallerEvent {
         [string]$EntryType = 'Information'
     )
     try {
-        Write-EventLog -LogName $InstallerEventLogName -Source $InstallerEventSource -EventId $EventId -EntryType $EntryType -Message $Message
-    } catch {}
+
+        $max = 3
+
+        for ($attempt = 1; $attempt -le $max; $attempt++) {
+
+          try {
+
+            Write-EventLog -LogName $InstallerEventLogName -Source $InstallerEventSource -EventId $EventId -EntryType $EntryType -Message $Message
+
+            break
+
+          } catch {
+
+            if ($attempt -eq $max) {
+
+              try { Write-InstallerAuditLine ("[WARN] Write-EventLog failed (attempts=" + $max + "): " + $_.Exception.Message) } catch {}
+
+            } else {
+
+              Start-Sleep -Milliseconds (200 * [Math]::Pow(2, ($attempt - 1)))
+
+            }
+
+          }
+
+        }
+    }
+catch {}
 }
 
 # ============================================================
@@ -160,24 +189,29 @@ function Test-FirewallCoreAlreadyInstalled {
     if (-not (Test-Path -LiteralPath $DefenderScript)) { return $false }
 
     $haveDefTask = $false
-    try { $haveDefTask = [bool](Get-ScheduledTask -TaskName "Firewall-Defender-Integration" -ErrorAction SilentlyContinue) } catch {}
+    try {
+ $haveDefTask = [bool](Get-ScheduledTask -TaskName "Firewall-Defender-Integration" -ErrorAction SilentlyContinue) }
+catch {}
     if (-not $haveDefTask) { return $false }
 
     $haveCert = $false
     try {
-        Ensure-CertProvider
+
         $cert = Get-ChildItem Cert:\LocalMachine\Root | Where-Object Thumbprint -EQ $CertThumbprint
         $haveCert = [bool]$cert
-    } catch {}
+    }
+catch {}
     if (-not $haveCert) { return $false }
 
     $haveEventSource = $false
     try {
+
         if ([System.Diagnostics.EventLog]::SourceExists($InstallerEventSource)) {
             $ln = [System.Diagnostics.EventLog]::LogNameFromSourceName($InstallerEventSource, ".")
             $haveEventSource = ($ln -eq $InstallerEventLogName)
         }
-    } catch {}
+    }
+catch {}
     if (-not $haveEventSource) { return $false }
 
     return $true
@@ -191,6 +225,7 @@ Ensure-InstallerEventSource
 Write-InstallerEvent -EventId 1000 -Message $startMsg -EntryType Information
 
 try {
+
     Write-Output "================================================="
     Write-Output "Firewall Core Installer Invocation"
     Write-Output "Start     : $($RunStart.ToString('yyyy-MM-dd HH:mm:ss'))"
@@ -219,6 +254,8 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $LogsDir "Install") -Force | Out-Null
     New-Item -ItemType Directory -Path $LiveSystemDir -Force | Out-Null
 
+
+
 # ============================================================
 # MATERIALIZE SYSTEM SCRIPTS (INSTALLER → LIVE TREE)
 # ============================================================
@@ -236,6 +273,57 @@ $RequiredSystemScripts = @(
 
         Copy-Item $src $dst -Force
     }
+	
+	function Install-FirewallRootRuntime {
+  param(
+    [Parameter(Mandatory=$true)][string]$RepoRoot
+  )
+
+  $src = Join-Path $RepoRoot 'Firewall'
+  $dst = 'C:\Firewall'
+
+  if (-not (Test-Path -LiteralPath $src)) {
+    throw "Firewall runtime source missing: $src"
+  }
+
+  if (-not (Test-Path -LiteralPath $dst)) {
+    New-Item -ItemType Directory -Path $dst -Force | Out-Null
+  }
+
+  Write-InstallerAuditLine ("FIREWALL_ROOT | src={0} | dst={1} | action=Deploy" -f $src, $dst)
+  Write-InstallerEvent -EventId 1020 -Message ("Firewall Root Deploy started: {0} -> {1}" -f $src, $dst) -EntryType Information
+
+  # Robocopy: deterministic mirror. Exit codes 0-7 are success, >=8 failure.
+  $cmd = @(
+    'robocopy',
+    ('"{0}"' -f $src),
+    ('"{0}"' -f $dst),
+    '/MIR','/R:2','/W:1','/XJ',
+    '/NP','/NFL','/NDL','/NJH','/NJS'
+  ) -join ' '
+
+  # Use cmd.exe to avoid quoting edge cases in PS5.1 invocation
+  cmd.exe /c $cmd | Out-Null
+  $rc = $LASTEXITCODE
+
+  if ($rc -ge 8) {
+    Write-InstallerAuditLine ("FIREWALL_ROOT | action=Deploy | result=FAIL | robocopyExit={0}" -f $rc)
+    Write-InstallerEvent -EventId 1021 -Message ("Firewall Root Deploy FAILED (robocopy exit {0})" -f $rc) -EntryType Error
+    throw ("Firewall root deploy failed (robocopy exit {0})" -f $rc)
+  }
+
+  # Verify destination exists and has content
+  $dstCount = (Get-ChildItem -LiteralPath $dst -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object).Count
+  if ($dstCount -le 0) {
+    Write-InstallerAuditLine "FIREWALL_ROOT | action=Deploy | result=FAIL | reason=NoFilesAtDestination"
+    Write-InstallerEvent -EventId 1022 -Message "Firewall Root Deploy FAILED (destination empty)" -EntryType Error
+    throw "Firewall root deploy failed (destination empty)"
+  }
+
+  Write-InstallerAuditLine ("FIREWALL_ROOT | action=Deploy | result=OK | robocopyExit={0} | files={1}" -f $rc, $dstCount)
+  Write-InstallerEvent -EventId 1023 -Message ("Firewall Root Deploy OK (robocopy exit {0}, files {1})" -f $rc, $dstCount) -EntryType Information
+}
+
 
 # ============================================================
 # REGISTER FIREWALLCORE EVENT LOG (LIVE TREE ONLY)
@@ -254,6 +342,7 @@ $RequiredSystemScripts = @(
 # FIREWALL POLICY + BASELINES (module-owned; backward compatible)
 # ============================================================
     try {
+
         $ProgramDataRoot = Join-Path $env:ProgramData 'FirewallCore'
         $baselineModule = Join-Path $InstallerRoot 'Firewall\Modules\Firewall-InstallerBaselines.psm1'
         if (-not (Test-Path -LiteralPath $baselineModule)) {
@@ -267,11 +356,22 @@ $RequiredSystemScripts = @(
 
         $preOk  = if ($b.Pre.ManifestOk) { 'true' } else { 'false' }
         $postOk = if ($b.Post.ManifestOk) { 'true' } else { 'false' }
-        $audit = "BASELINES | stamp=$InstallerAuditStamp | pre=$($b.Pre.Dir) | post=$($b.Post.Dir) | preManifestOk=$preOk | postManifestOk=$postOk"
+        $ts = $InstallerAuditStamp  # keep existing yyyyMMdd_HHmmss for deterministic folder/file naming
+        $tsLocal = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
+        $tz = [TimeZoneInfo]::Local.StandardName
+    # --- BASELINES audit (readable) ---
+    $ts = $InstallerAuditStamp  # keep existing yyyyMMdd_HHmmss for folder/file naming
+    $now = Get-Date
+    $tslocal = $now.ToString('yyyy-MM-dd HH:mm:ss zzz')
+    $tz = [TimeZoneInfo]::Local.StandardName
+
+    $audit = ("BASELINES | ts={0} | tslocal={1} | tz={2} | pre={3} | post={4} | preManifestOk={5} | postManifestOk={6}" -f `
+      $ts, $tslocal, $tz, $b.Pre.Dir, $b.Post.Dir, $preOk, $postOk)
         Write-InstallerAuditLine $audit
         Write-InstallerEvent -EventId 1011 -Message $audit -EntryType Information
         Write-Host "[OK] FirewallCore policy applied + baselines captured" -ForegroundColor Green
-    } catch {
+    }
+catch {
         Write-Host ("[FATAL] Firewall policy/baseline step failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
         throw
     }
@@ -280,8 +380,6 @@ $RequiredSystemScripts = @(
 # CERTIFICATE
 # ============================================================
     Write-Host "[CERT] Checking trusted certificate" -ForegroundColor Cyan
-
-    Ensure-CertProvider
 
     $cert = Get-ChildItem Cert:\LocalMachine\Root 
         Where-Object Thumbprint -EQ $CertThumbprint
@@ -298,30 +396,38 @@ $RequiredSystemScripts = @(
     }
 
 # ============================================================
+# ============================================================
+# ============================================================
 # SCHEDULED TASK – DEFENDER INTEGRATION (SYSTEM)
 # ============================================================
-    if (-not (Test-Path $DefenderScript)) {
-        throw "Missing Defender integration script: $DefenderScript"
-    }
+# --- Defender Integration (install-source -> ProgramData -> execute) ---
 
-    $DefenderArgs = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy AllSigned -File `"$DefenderScript`""
-    $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $DefenderArgs
+# Install-source: always from repo/media (NOT live)
+$repoRoot = Split-Path -Parent $PSScriptRoot  # _internal -> repo root
+$defenderSource = Join-Path (Join-Path $repoRoot 'Firewall\Maintenance') 'Enable-DefenderIntegration.ps1'
 
-    $Trigger   = New-ScheduledTaskTrigger -AtStartup
-    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    $Settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
+if (-not (Test-Path -LiteralPath $defenderSource)) {
+  throw "Missing Defender integration script (install source): $defenderSource"
+}
 
-    Register-ScheduledTask `
-        -TaskName "Firewall-Defender-Integration" `
-        -Action $Action `
-        -Trigger $Trigger `
-        -Principal $Principal `
-        -Settings $Settings `
-        -Force | Out-Null
+# ProgramData target (live)
+$pdRoot  = Join-Path $env:ProgramData 'FirewallCore'
+$pdMaint = Join-Path $pdRoot 'Maintenance'
+if (-not (Test-Path -LiteralPath $pdMaint)) { New-Item -ItemType Directory -Path $pdMaint -Force | Out-Null }
 
-    Write-Host "[OK] Scheduled task registered: Firewall-Defender-Integration" -ForegroundColor Green
+$defenderLive = Join-Path $pdMaint 'Enable-DefenderIntegration.ps1'
 
-# ============================================================
+# Deploy
+Copy-Item -LiteralPath $defenderSource -Destination $defenderLive -Force
+
+# Execute using the launch contract (hidden, no profile, non-interactive)
+# NOTE: AllSigned requires $defenderLive to be signed too.
+$powershellExe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$arg = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy AllSigned -File "{0}"' -f $defenderLive
+$proc = Start-Process -FilePath $powershellExe -ArgumentList $arg -Wait -PassThru -WindowStyle Hidden
+if ($proc.ExitCode -ne 0) {
+  throw "Defender integration failed (ExitCode=$($proc.ExitCode)). Script: $defenderLive"
+}
 # TOAST LISTENER (USER LOGON)
 # ============================================================
     $ToastScript = Join-Path $FirewallRoot "User\FirewallToastListener.ps1"
@@ -356,9 +462,12 @@ $RequiredSystemScripts = @(
     # --- BEGIN FIREWALLCORE TOAST SELFHEAL INFRA ---
     # Self-healing Toast Listener infra (no console windows; background tasks)
     try {
+
         $RepoRoot = $InstallerRoot
         $LiveRoot = "C:\Firewall"
 
+        # ---- Deploy full Firewall runtime root (repo\Firewall -> C:\Firewall) ----
+        Install-FirewallRootRuntime -RepoRoot $RepoRoot
     # ---- Copy packaged sounds (repo) -> live install root ----
         $RepoSounds = Join-Path $RepoRoot "Firewall\Sounds"
         $LiveSounds = Join-Path $LiveRoot "Sounds"
@@ -386,6 +495,7 @@ $RequiredSystemScripts = @(
         $UserTask = Get-ScheduledTask -TaskName "FirewallCore Toast Listener" -ErrorAction SilentlyContinue
         if ($UserTask) {
             try {
+
                 $a = $UserTask.Actions[0]
                 if ($a.Execute -match "powershell\.exe|pwsh\.exe") {
                     if ($a.Arguments -notmatch "-WindowStyle\s+Hidden") {
@@ -400,7 +510,8 @@ $RequiredSystemScripts = @(
                         Write-Host "[OK] Updated listener task to run hidden"
                     }
                 }
-            } catch {
+            }
+catch {
                 Write-Host "[WARN] Could not enforce hidden window on listener task"
             }
         }
@@ -418,17 +529,22 @@ $RequiredSystemScripts = @(
         }
 
     # ---- Start tasks (background) ----
-        try { $listener = Get-ScheduledTask -TaskName 'FirewallCore-ToastListener' -TaskPath '\' -ErrorAction SilentlyContinue
+        try {
+ $listener = Get-ScheduledTask -TaskName 'FirewallCore-ToastListener' -TaskPath '\' -ErrorAction SilentlyContinue
 if ($listener) {
     Start-ScheduledTask -TaskPath $listener.TaskPath -TaskName $listener.TaskName
     auditLog -Level 'INFO' -Message "Started task: $($listener.TaskPath)$($listener.TaskName)"
 } else {
     auditLog -Level 'WARN' -Message "Toast Listener task not found to start."
 }
-} catch {}
-        try { schtasks.exe /Run /TN "FirewallCore Toast Watchdog" | Out-Null } catch {}
+}
+catch {}
+        try {
+ schtasks.exe /Run /TN "FirewallCore Toast Watchdog" | Out-Null }
+catch {}
 
-    } catch {
+    }
+catch {
         Write-Host "[WARN] Toast self-heal infra install block failed: $($_.Exception.Message)"
     }
     # --- END FIREWALLCORE TOAST SELFHEAL INFRA ---
@@ -437,7 +553,8 @@ if ($listener) {
     Write-InstallerAuditLine $endMsg
     Write-InstallerEvent -EventId 1008 -Message $endMsg -EntryType Information
 
-} catch {
+}
+catch {
     $ex = $_.Exception
     $failMsg = "INSTALL FAIL | mode=$ModeNormalized | error=$($ex.Message)"
     Write-InstallerAuditLine $failMsg
@@ -448,12 +565,11 @@ if ($listener) {
     Stop-TranscriptSafe
 }
 
-
 # SIG # Begin signature block
 # MIIEkwYJKoZIhvcNAQcCoIIEhDCCBIACAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBnu0zz64tSURJI
-# WneweuVggKq6fWlERLrK5gfbDmXLKaCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBw5LFKOMBNLpuL
+# Htc5PwOP5x+5gc6Q+qa8CKqDfxnudKCCArUwggKxMIIBmaADAgECAhQD4857cPuq
 # YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
 # bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
 # NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
@@ -472,7 +588,7 @@ if ($listener) {
 # b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# IF8sKnQUCBJP/VQ/tcTG6RvC1ihve2mB2FRDl43eXlAVMAsGByqGSM49AgEFAARH
-# MEUCIGaWa1DRr9zZ10oE8jhcqbOK4eDXrjepd5pB+jEbS2+nAiEAzizSHZPI+ay0
-# dtHvg0UQF+8rXrsxzH7v0resV3z46qU=
+# IPA1rsryi/1Ejw6x4JKyXsQki8S+lSQao8y5szWq1EuYMAsGByqGSM49AgEFAARH
+# MEUCIQCy0fldCDZIGluJlExFPSkEfXJ1cmPEUYA0SSm817v4pwIgVau0RyKsXnvN
+# S78CH6vtr6L5ZbGO+T/wsSeD+xphdHA=
 # SIG # End signature block

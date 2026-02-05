@@ -1,7 +1,0 @@
-﻿<QueryList>
-  <Query Id="0" Path="FirewallCore">
-    <Select Path="FirewallCore">
-      *[System[EventID=9001]]
-    </Select>
-  </Query>
-</QueryList>
