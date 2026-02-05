@@ -6,3 +6,7 @@
 *.md   text eol=lf
 *.yml  text eol=lf
 *.yaml text eol=lf
+
+# Firewall policy artifacts must remain byte-stable (no normalization)
+Firewall/Policy/* -text -working-tree-encoding
+
