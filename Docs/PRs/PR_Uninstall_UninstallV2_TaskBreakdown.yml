@@ -1,0 +1,43 @@
+version: 1
+title: Uninstall V2 (Default + Clean) — Logging + Verification
+constraints:
+  powershell: PS5.1
+  execution_policy: AllSigned
+  no_refactors: true
+  preserve_existing_behavior: true
+event_id_ranges:
+  install: '1000-1099'
+  repair_reserved: '1100-1199'
+  uninstall_default: '1200-1299'
+  uninstall_clean: '1300-1399'
+  verification: '1400-1499'
+tasks:
+  - id: U1
+    title: Make uninstall logging resilient to file locks
+    acceptance:
+      - Uninstall never fails due to transcript/Add-Content file lock errors
+      - EVTX always records WARN when file logging fails
+  - id: U2
+    title: Implement deterministic EVTX event IDs for uninstall
+    acceptance:
+      - Default uninstall uses IDs 1200-1299 with BEGIN/END and step events
+      - Clean uninstall uses IDs 1300-1399 with BEGIN/END and step events
+      - Messages use consistent CamelCase labels
+  - id: U3
+    title: Add verification ledger output for Admin Panel reuse
+    acceptance:
+      - Outputs line-by-line checks for tasks, paths, rules, EVTX channel, logs
+      - Default vs Clean verification matches behavior contract
+  - id: U4
+    title: Ensure Clean uninstall removes FirewallCore rule groups only
+    acceptance:
+      - Removes FirewallCorev1/v2/v3 rule groups
+      - Does not attempt full firewall reset unless restoring known PRE baseline
+  - id: U5
+    title: Preserve EVTX channel and logs across all uninstall modes
+    acceptance:
+      - FirewallCore EVTX channel remains after uninstall
+      - Logs directory remains after uninstall
+notes:
+  - 'Implement only what is required; do not add new features.'
+  - 'Keep installer behavior unchanged.'

@@ -34,3 +34,27 @@
   - Authenticode signatures verify as Valid
 - Installer is locked on main; future work proceeds under uninstall artifacts.
 
+
+## 2026-02-05 01:39:18 — AllSigned reinstall break / resign required (locked-in)
+
+### Failure
+- After uninstall → reinstall, installer fails under ExecutionPolicy=AllSigned when importing unsigned/invalid modules.
+- Observed: Firewall\Modules\Firewall-InstallerBaselines.psm1 blocked (“not digitally signed”).
+- Secondary issues encountered:
+  - Installer logging helpers not available in session (Write-InstallerAuditLine / Write-InstallerEvent scope/order).
+  - Signing helper parse error: “An empty pipe element is not allowed” (pipeline construction).
+
+### Root cause
+- AllSigned correctly blocks any NotSigned/HashMismatch dependency. Signing entry points is insufficient; imported modules/scripts must also be Valid-signed.
+- Any patch/edit invalidates Authenticode → requires re-sign + verify before retest.
+
+### Locked SOP
+1) Identify first failing path from console error.
+2) Get-AuthenticodeSignature on offender.
+3) Unblock-File as needed (MOTW).
+4) Re-sign execution surface (modules/helpers/task scripts) with A33 SHA256 and verify Status=Valid.
+5) Re-run installer under AllSigned.
+
+### Guardrail to implement
+- Add a Signing Health Gate preflight that fails fast if any executed/imported ps1/psm1/psd1 is not Valid.
+

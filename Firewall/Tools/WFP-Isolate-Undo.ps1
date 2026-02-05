@@ -27,6 +27,6 @@ Write-Host "[OK] Host isolation reverted to previous defaults and allow rules re
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
 # IAQmJnGXihSm7BVWN9P1ZGZdPx7O9XCHmVDTxEpEzMGPMAsGByqGSM49AgEFAARH
-# MEUCIQCs3gC/Y39IAI7oq1i63b2JUADY8RWz6kcRnx1DedNXagIgFOqY6MoptaV0
-# 5LcRZAa+4c5Aus/HaQoR0vaiuDaEHMs=
+# MEUCIBmzRewyOSF2yQdrL/Jq9m7zyReJVwm1j7py/PLRrpATAiEA2O3acEMrOCfX
+# 4xxpeNSEjZ7NfDuKmeUIfu0hrj3ggNs=
 # SIG # End signature block

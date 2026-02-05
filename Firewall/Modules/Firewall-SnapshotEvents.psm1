@@ -1,4 +1,4 @@
-﻿# ------------------------------------------------------------
+# ------------------------------------------------------------
 # Optional event writer shim (safe on clean machines)
 # ------------------------------------------------------------
 if (-not (Get-Command Write-FirewallEvent -ErrorAction SilentlyContinue)) {
@@ -124,10 +124,10 @@ RunId=$RunId
 Export-ModuleMember -Function Emit-FirewallSnapshotEvent
 
 # SIG # Begin signature block
-# MIIElAYJKoZIhvcNAQcCoIIEhTCCBIECAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# MIIEkwYJKoZIhvcNAQcCoIIEhDCCBIACAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBzOovaBm77hY5L
-# 0B4DPUTtRAe4cst91/t1hbXBqSH/AqCCArUwggKxMIIBmaADAgECAhQD4857cPuq
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBhOtAS4fAnq7zJ
+# iNmbShnal/sVr8gZcduHC41F/o76WqCCArUwggKxMIIBmaADAgECAhQD4857cPuq
 # YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
 # bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
 # NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
@@ -142,11 +142,11 @@ Export-ModuleMember -Function Emit-FirewallSnapshotEvent
 # il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
 # u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
 # KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
-# ggE1MIIBMQIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
+# ggE0MIIBMAIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
 # b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
 # CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
 # AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# INOMooX9jbbRl3kAeqH3CKolMRSqJYiCjBRmMYHcLMijMAsGByqGSM49AgEFAARI
-# MEYCIQDtloJH7YTXqy99AHCLY3pQwWFKagDaP24agDBwMLQ4agIhAL8PSEGB1IW6
-# RzvDVX4RVdnahLA5muyxy+mourMwc6qc
+# IB+bkfWj+fGuJAEBxdj+i8dMSpokMNvcleux2rXkFTxeMAsGByqGSM49AgEFAARH
+# MEUCIQDRWnjROrIP5oHMyhTWX6DKigks+fHhZSXrcv1H1LfbBgIgPuuPpCaLqY6D
+# Zwdlh3REvt0pSgXGtPyVKWPoBWN1ALI=
 # SIG # End signature block

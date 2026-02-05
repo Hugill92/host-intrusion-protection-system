@@ -45,3 +45,46 @@
 ## Repo hygiene decision
 - Sprint notes must live on main under Docs\Sprints\Sprint-* so sprint history is visible without digging through branches.
 
+
+## 2026-02-05 01:39:18 — AllSigned reinstall break / resign required (locked-in)
+
+### Failure
+- After uninstall → reinstall, installer fails under ExecutionPolicy=AllSigned when importing unsigned/invalid modules.
+- Observed: Firewall\Modules\Firewall-InstallerBaselines.psm1 blocked (“not digitally signed”).
+- Secondary issues encountered:
+  - Installer logging helpers not available in session (Write-InstallerAuditLine / Write-InstallerEvent scope/order).
+  - Signing helper parse error: “An empty pipe element is not allowed” (pipeline construction).
+
+### Root cause
+- AllSigned correctly blocks any NotSigned/HashMismatch dependency. Signing entry points is insufficient; imported modules/scripts must also be Valid-signed.
+- Any patch/edit invalidates Authenticode → requires re-sign + verify before retest.
+
+### Locked SOP
+1) Identify first failing path from console error.
+2) Get-AuthenticodeSignature on offender.
+3) Unblock-File as needed (MOTW).
+4) Re-sign execution surface (modules/helpers/task scripts) with A33 SHA256 and verify Status=Valid.
+5) Re-run installer under AllSigned.
+
+### Guardrail to implement
+- Add a Signing Health Gate preflight that fails fast if any executed/imported ps1/psm1/psd1 is not Valid.
+
+
+## 2026-02-05 01:52:47 — Installer fixed: deploy full Firewall root during install
+
+### Fix
+- Installer now deploys full Firewall runtime root from repo to C:\Firewall during install (not just partial staging).
+- Root cause: Install-FirewallRootRuntime existed but was not called in install flow; call inserted in canonical installer path.
+
+### Outcome
+- Install succeeded end-to-end (event log ready, policy + PRE/POST baselines captured, certificate trusted, toast listener registered).
+- Verified C:\Firewall exists after install, but initial count check showed partial tree prior to fix; now installer contract is to mirror full runtime root deterministically each install.
+
+### Lessons learned
+- AllSigned will fail fast on any unsigned module imported by the installer (e.g., Firewall-InstallerBaselines.psm1). Sign dependencies, not just entry points.
+- PS5.1 Join-Path pitfalls: avoid passing object arrays to -AdditionalChildPath; prefer [IO.Path]::Combine() for targets lists.
+
+### Next
+- Add deterministic uninstall-step logging during install to stage Admin Panel UI gating and evidence.
+- Investigate why some scripts require re-sign after install/uninstall even when no intentional edits were made; add signing health gate + evidence.
+
