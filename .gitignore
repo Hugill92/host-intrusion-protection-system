@@ -142,3 +142,17 @@ Docs/_local/
 # If you ever export/bundle inside repo by mistake:
 BUNDLE_*/
 BASELINE_*/
+
+# --- FirewallCore local/dev artifacts (never commit) ---
+*.bak
+*.bak_*
+*.broken.*
+*.tmp
+*.log
+*.zip
+*.code-workspace
+.vscode/
+.codex/
+Docs/_local/
+BUNDLE_*/
+BASELINE_*/
