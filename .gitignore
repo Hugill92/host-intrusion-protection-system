@@ -156,3 +156,7 @@ BASELINE_*/
 Docs/_local/
 BUNDLE_*/
 BASELINE_*/
+
+# Local/public cert artifacts (never commit)
+Firewall/ScriptSigningCert.cer
+
