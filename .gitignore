@@ -160,3 +160,20 @@ BASELINE_*/
 # Local/public cert artifacts (never commit)
 Firewall/ScriptSigningCert.cer
 
+
+# --- LOCAL-ONLY (do not commit) ---
+_local/
+_backup/
+Tools/_local/
+
+# Local tagging scratch (keep out of repo unless explicitly promoted to Tools/)
+Tools/Tagging/
+
+# Policy exports / duplicates (canonical lives under Firewall/Policy/)
+Policies/FirewallCorePolicy_v1.wfw
+Policies/FirewallCorePolicy_v1.wfw.sha256.txt
+Policies/FirewallCorePolicy_v1_Names.json
+Policies/FirewallCorePolicy_v1_Names.json.sha256.txt
+
+# Defender integration scratch (if/when promoted, move into Firewall/Maintenance as tracked)
+Firewall/Maintenance/Invoke-DefenderIntegration.ps1
