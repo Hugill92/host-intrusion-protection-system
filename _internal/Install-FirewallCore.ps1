@@ -352,7 +352,33 @@ $RequiredSystemScripts = @(
         Import-Module -Name $baselineModule -Force -ErrorAction Stop
 
         Write-Host "[INSTALL] Applying FirewallCore policy + capturing PRE/POST baselines..." -ForegroundColor Cyan
-        $b = Invoke-FirewallCorePolicyApplyWithBaselines -InstallerRoot $InstallerRoot -ProgramDataRoot $ProgramDataRoot -Stamp $InstallerAuditStamp -Mode $ModeNormalized
+        $b = # --- Ensure baselines function is available (force import at point-of-use) ---
+if (-not (Get-Command -Name Invoke-FirewallCorePolicyApplyWithBaselines -ErrorAction SilentlyContinue)) {
+  $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+
+  $m1 = Join-Path $repoRoot 'Firewall\Modules\Baselines\Firewall-InstallerBaselines.psm1'
+  $m2 = Join-Path $repoRoot 'Firewall\Modules\Firewall-InstallerBaselines.psm1'
+
+  foreach ($m in @($m1,$m2)) {
+    if (Test-Path -LiteralPath $m) {
+      try {
+        Import-Module -Name $m -Force -ErrorAction Stop
+        if (Get-Command -Name Invoke-FirewallCorePolicyApplyWithBaselines -ErrorAction SilentlyContinue) {
+          Write-Host "[OK] Baselines module imported (point-of-use): $m" -ForegroundColor Green
+          break
+        }
+      } catch {
+        Write-Host "[WARN] Baselines import failed: $m :: $($_.Exception.Message)" -ForegroundColor Yellow
+      }
+    }
+  }
+
+  if (-not (Get-Command -Name Invoke-FirewallCorePolicyApplyWithBaselines -ErrorAction SilentlyContinue)) {
+    throw "Invoke-FirewallCorePolicyApplyWithBaselines still missing after import attempts."
+  }
+}
+# --- end guard ---
+Invoke-FirewallCorePolicyApplyWithBaselines -InstallerRoot $InstallerRoot -ProgramDataRoot $ProgramDataRoot -Stamp $InstallerAuditStamp -Mode $ModeNormalized
 
         $preOk  = if ($b.Pre.ManifestOk) { 'true' } else { 'false' }
         $postOk = if ($b.Post.ManifestOk) { 'true' } else { 'false' }
@@ -426,7 +452,12 @@ $powershellExe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershe
 $arg = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy AllSigned -File "{0}"' -f $defenderLive
 $proc = Start-Process -FilePath $powershellExe -ArgumentList $arg -Wait -PassThru -WindowStyle Hidden
 if ($proc.ExitCode -ne 0) {
-  throw "Defender integration failed (ExitCode=$($proc.ExitCode)). Script: $defenderLive"
+    $msg = "Defender integration failed (ExitCode=$($proc.ExitCode)). Script: $DefenderScript"
+    if ($ModeNormalized -eq 'DEV' -or $Mode -eq 'DEV') {
+      Write-Warning $msg
+    } else {
+      throw $msg
+    }
 }
 # TOAST LISTENER (USER LOGON)
 # ============================================================
@@ -564,31 +595,5 @@ catch {
 } finally {
     Stop-TranscriptSafe
 }
+    $msg = "Defender integration failed (ExitCode=$($proc.ExitCode)). Script: $defenderScript"; if ($Mode -eq 'DEV') { Write-Warning $msg } else { throw $msg }
 
-# SIG # Begin signature block
-# MIIEkwYJKoZIhvcNAQcCoIIEhDCCBIACAQExDzANBglghkgBZQMEAgEFADB5Bgor
-# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBw5LFKOMBNLpuL
-# Htc5PwOP5x+5gc6Q+qa8CKqDfxnudKCCArUwggKxMIIBmaADAgECAhQD4857cPuq
-# YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
-# bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
-# NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
-# DAxGaXJld2FsbENvcmUxHzAdBgNVBAMMFkZpcmV3YWxsQ29yZSBTaWduYXR1cmUw
-# WTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEFkC5IO0Ns0zPmdtnHpeiy/QjGyR5
-# XcfYjx8wjVhMYoyZ5gyGaXjRBAnBsRsbSL172kF3dMSv20JufNI5SmZMo28wbTAJ
-# BgNVHRMEAjAAMAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNV
-# HQ4EFgQUqbvNi/eHRRZJy7n5n3zuXu/sSOwwHwYDVR0jBBgwFoAULCjMhE2sOk26
-# qY28GVmu4DqwehMwDQYJKoZIhvcNAQELBQADggEBAJsvjHGxkxvAWGAH1xiR+SOb
-# vLKaaqVwKme3hHAXmTathgWUjjDwHQgFohPy7Zig2Msu11zlReUCGdGu2easaECF
-# dMyiKzfZIA4+MQHQWv+SMcm912OjDtwEtCjNC0/+Q1BDISPv7OA8w7TDrmLk00mS
-# il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
-# u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
-# KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
-# ggE0MIIBMAIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
-# b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
-# CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
-# AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# IPA1rsryi/1Ejw6x4JKyXsQki8S+lSQao8y5szWq1EuYMAsGByqGSM49AgEFAARH
-# MEUCIQCy0fldCDZIGluJlExFPSkEfXJ1cmPEUYA0SSm817v4pwIgVau0RyKsXnvN
-# S78CH6vtr6L5ZbGO+T/wsSeD+xphdHA=
-# SIG # End signature block
