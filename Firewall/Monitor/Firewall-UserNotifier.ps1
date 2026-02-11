@@ -1,42 +1,7 @@
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+# FirewallCore shim (compat path). Do not edit business logic here.
+# This file exists to keep scheduled tasks / callers stable while code is reorganized.
+# Real implementation:
+#   C:\FirewallInstaller\Firewall\Monitor\Notifications\Firewall-UserNotifier.ps1
 
-$Notifier = "C:\Firewall\Monitor\Invoke-FirewallNotifier.ps1"
-if (-not (Test-Path $Notifier)) { throw "Missing notifier script: $Notifier" }
-
-while ($true) {
-    try {
-        & powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File $Notifier
-    } catch {
-        # never crash the wrapper
-    }
-    Start-Sleep -Seconds 2
-}
-
-# SIG # Begin signature block
-# MIIElAYJKoZIhvcNAQcCoIIEhTCCBIECAQExDzANBglghkgBZQMEAgEFADB5Bgor
-# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAfHS4IFAbjx7ov
-# nADR3WAwSsjHTW1+WB/ltgXeBa/8iKCCArUwggKxMIIBmaADAgECAhQD4857cPuq
-# YA1JZL+WI1Yn9crpsTANBgkqhkiG9w0BAQsFADAnMSUwIwYDVQQDDBxGaXJld2Fs
-# bENvcmUgT2ZmbGluZSBSb290IENBMB4XDTI2MDIwMzA3NTU1N1oXDTI5MDMwOTA3
-# NTU1N1owWDELMAkGA1UEBhMCVVMxETAPBgNVBAsMCFNlY3VyaXR5MRUwEwYDVQQK
-# DAxGaXJld2FsbENvcmUxHzAdBgNVBAMMFkZpcmV3YWxsQ29yZSBTaWduYXR1cmUw
-# WTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEFkC5IO0Ns0zPmdtnHpeiy/QjGyR5
-# XcfYjx8wjVhMYoyZ5gyGaXjRBAnBsRsbSL172kF3dMSv20JufNI5SmZMo28wbTAJ
-# BgNVHRMEAjAAMAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAzAdBgNV
-# HQ4EFgQUqbvNi/eHRRZJy7n5n3zuXu/sSOwwHwYDVR0jBBgwFoAULCjMhE2sOk26
-# qY28GVmu4DqwehMwDQYJKoZIhvcNAQELBQADggEBAJsvjHGxkxvAWGAH1xiR+SOb
-# vLKaaqVwKme3hHAXmTathgWUjjDwHQgFohPy7Zig2Msu11zlReUCGdGu2easaECF
-# dMyiKzfZIA4+MQHQWv+SMcm912OjDtwEtCjNC0/+Q1BDISPv7OA8w7TDrmLk00mS
-# il/f6Z4ZNlfegdoDyeDYK8lf+9DO2ARrddRU+wYrgXcdRzhekkBs9IoJ4qfXokOv
-# u2ZvVZrPE3f2IiFPbmuBgzdbJ/VdkeCoAOl+D33Qyddzk8J/z7WSDiWqISF1E7GZ
-# KSjgQp8c9McTcW15Ym4MR+lbyn3+CigGOrl89lzhMymm6rj6vSbvSMml2AEQgH0x
-# ggE1MIIBMQIBATA/MCcxJTAjBgNVBAMMHEZpcmV3YWxsQ29yZSBPZmZsaW5lIFJv
-# b3QgQ0ECFAPjzntw+6pgDUlkv5YjVif1yumxMA0GCWCGSAFlAwQCAQUAoIGEMBgG
-# CisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcC
-# AQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZIhvcNAQkEMSIE
-# ILRdMhDEk9wcj4++2Myp3ZD4CJr5JjMtnAs/OsYkFF9iMAsGByqGSM49AgEFAARI
-# MEYCIQDiPDuhWnh5rPMqk6YG4vqtpCQ8Q9fpiS4MC+j/+yMY4AIhAIbbEG1myR7O
-# kw1TLIow060aXTDzkEeDyIzAiVmNSCVo
-# SIG # End signature block
+$ErrorActionPreference = 'Stop'
+& 'C:\FirewallInstaller\Firewall\Monitor\Notifications\Firewall-UserNotifier.ps1' @args

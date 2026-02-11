@@ -86,3 +86,34 @@ CI additions:
 - Explicit GPO policy layer (documented and optional).
 - File + registry scanning baseline enforcement.
 - Network expansion features (separate roadmap section once core reliability is stable).
+
+## V2 Roadmap Additions (planned)
+- **FeatureSet V2: Windows Optional Features** — manifest-driven converge during install/update/repair (AuditOnly + Enforce).
+- **Network Admin Suite** — deterministic network inventory + repair actions + safe profile/sharing convergence + Windows Security visibility.
+  - Planning reference: `Docs/Sprints/Sprint-3/NetworkAdmin_V2_NetworkingSuiteAndSharing.md`
+<!-- BEGIN V2_OPTIMIZATIONS -->
+## v2 — Optimizations and Experimental Feature Flags
+
+### Admin Panel: Optimizations
+- New section: **Actions → Optimizations** (not Quick Actions)
+- Checkbox packages (default simple view):
+  - Performance (Safe)
+  - Latency Tweaks (Medium)
+  - UI/Telemetry Lean (Medium)
+  - Cross-Device Resume Disable (User-level; HKCU)
+- Preview Changes (read-only) available without Maintenance Mode
+- Apply / Verify / Rollback are **Maintenance Mode gated**
+- Evidence + support workflow:
+  - Export targeted rollback snapshots **before** applying changes
+  - Write deterministic logs to ProgramData (JSON + WhatItDoes + verification)
+
+### Admin Panel: Experimental Feature Flags
+- Separate section: **Actions → Experimental Feature Flags**
+- Supports a drop-in tool runner located in ProgramData (not shipped inside FirewallCore)
+- Logs tool file hashes, arguments, stdout/stderr, and exit code per run
+- Requires explicit confirmation each run; labeled Experimental
+
+### Registry snapshot baseline (install-time)
+- On v2 install, capture a targeted “pre-change” snapshot of all registry keys managed by the optimization manifest.
+<!-- END V2_OPTIMIZATIONS -->
+

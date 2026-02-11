@@ -104,3 +104,55 @@ Must verify:
 ## Exit codes (architectural intent)
 - Use well-known Windows Installer-style codes when aborting operations.
 - Always log the root cause before exiting non-zero.
+
+## V2: Network Admin Suite (planned)
+**Purpose:** Provide deterministic network inventory + operator repair actions + safe profile/sharing convergence, with receipts and EVTX.
+
+**Inputs**
+- Network adapters and connection profiles (category, SSID when available)
+- Current IP/DNS/route/TCP state (inventory)
+- Firewall rule-group state for discovery/sharing (evidence)
+- Windows Security/Defender health signals (visibility)
+
+**Actions (admin-only for Enforce)**
+- DNS flush, DHCP renew, Winsock/TCPIP reset (explicit operator intent)
+- Network category enforce (Public/Private policy boundary)
+- Sharing posture converge (Public safe; Private optional policy)
+
+**Outputs**
+- Receipt JSON + EVTX events for inventory and actions
+- Optional “Export Network Report” for diagnostics bundles
+
+**Sprint planning reference**
+- `Docs/Sprints/Sprint-3/NetworkAdmin_V2_NetworkingSuiteAndSharing.md`
+<!-- BEGIN V2_OPTIMIZATIONS -->
+## v2 Optimizations subsystem
+
+### Intent
+Provide an opt-in optimization engine that supports:
+- Preview (read-only)
+- Apply (Maintenance Mode gated)
+- Verify (evidence)
+- Rollback (restore pre-change exports)
+
+### Gating
+- All write operations (apply/rollback/experimental tool execution) require Maintenance Mode.
+
+### Registry snapshot + rollback
+- Before applying any registry changes, export targeted key paths to a per-run rollback folder.
+- Record before/after values per optimization item in a structured JSON log.
+- Provide “Rollback Last Run” using the exported .reg snapshots.
+
+### Evidence + logging (ProgramData)
+Write logs under:
+- C:\ProgramData\FirewallCore\Logs\Optimizations\
+And rollback exports under:
+- C:\ProgramData\FirewallCore\Backups\Registry\
+
+### Experimental Feature Flags model
+- Third-party tools are not shipped inside FirewallCore.
+- A drop-in tool may be placed in:
+  - C:\ProgramData\FirewallCore\Tools\FeatureFlags\<ToolName>\
+- Each run logs SHA256 hashes, args, outputs, and exit code.
+<!-- END V2_OPTIMIZATIONS -->
+
