@@ -1,3 +1,17 @@
+  param(
+    [Parameter(Mandatory=$true)][string]$Path
+  )
+
+function Import-FCModuleSafe {
+  [CmdletBinding()]
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "Missing module path: $Path"
+  }
+
+  # Import-Module does NOT support -LiteralPath. Use -Name with a fully qualified filesystem path.
+  Import-Module -Name $Path -Force -ErrorAction Stop
+}
 # Install-Firewall.ps1
 # One-shot installer for Firewall Core system
 # MUST be run as admin (auto-elevates)
@@ -219,7 +233,7 @@ catch {}
 
 Initialize-InstallerAuditLog
 
-$startMsg = "INSTALL START | mode=$ModeNormalized | user=$RunUser | computer=$RunComputer | elevated=$ElevatedText | start=$($RunStart.ToString('yyyy-MM-dd HH:mm:ss'))"
+$startMsg = "Installation Started | mode=$ModeNormalized | user=$RunUser | computer=$RunComputer | elevated=$ElevatedText | start=$($RunStart.ToString('yyyy-MM-dd HH:mm:ss'))"
 Write-InstallerAuditLine $startMsg
 Ensure-InstallerEventSource
 Write-InstallerEvent -EventId 1000 -Message $startMsg -EntryType Information
@@ -238,7 +252,7 @@ try {
     Write-Output ""
 
     if (Test-FirewallCoreAlreadyInstalled) {
-        $noopMsg = "INSTALL No-Op | mode=$ModeNormalized | reason=already-installed"
+        $noopMsg = "Install No-Op | mode=$ModeNormalized | reason=already-installed"
         Write-InstallerAuditLine $noopMsg
         Write-InstallerEvent -EventId 1003 -Message $noopMsg -EntryType Information
         Write-Host "[No-Op] Firewall Core already installed; no changes required." -ForegroundColor DarkGray
@@ -334,9 +348,9 @@ $RequiredSystemScripts = @(
         throw "Event log script missing after materialization: $EventLogScript"
     }
 
-    Write-Host "[INSTALL] Registering FirewallCore event log..." -ForegroundColor Cyan
+    Write-Host "[Install -] Registering FirewallCore event log..." -ForegroundColor Cyan
     & $EventLogScript
-    Write-Host "[INSTALL] FirewallCore event log ready." -ForegroundColor Green
+    Write-Host "[Installation Succesful] FirewallCore event log ready." -ForegroundColor Green
 
 # ============================================================
 # FIREWALL POLICY + BASELINES (module-owned; backward compatible)
@@ -344,14 +358,29 @@ $RequiredSystemScripts = @(
     try {
 
         $ProgramDataRoot = Join-Path $env:ProgramData 'FirewallCore'
-        $baselineModule = Join-Path $InstallerRoot 'Firewall\Modules\Firewall-InstallerBaselines.psm1'
-        if (-not (Test-Path -LiteralPath $baselineModule)) {
-            throw "Missing installer baselines module: $baselineModule"
-        }
+        # Prefer newer location first; fall back for backward compatibility
+$baselineCandidates = @(
+  (Join-Path $InstallerRoot 'Firewall\Modules\Baselines\Firewall-InstallerBaselines.psm1'),
+  (Join-Path $InstallerRoot 'Firewall\Modules\Firewall-InstallerBaselines.psm1')
+)
 
-        Import-Module -Name $baselineModule -Force -ErrorAction Stop
+$imported = $false
+foreach ($m in $baselineCandidates) {
+  if (Test-Path -LiteralPath $m) {
+    Import-Module -Name $m -Force -ErrorAction Stop
+    $imported = $true
+    Write-Host "[OK] Baselines module imported (point-of-use): $m" -ForegroundColor Green
+    break
+  }
+}
 
-        Write-Host "[INSTALL] Applying FirewallCore policy + capturing PRE/POST baselines..." -ForegroundColor Cyan
+if (-not $imported) {
+  throw "Missing baselines module. Tried:`n  - $($baselineCandidates -join "`n  - ")"
+}
+
+if (-not (Get-Command -Name 'Invoke-FirewallCorePolicyApplyWithBaselines' -ErrorAction SilentlyContinue)) {
+  throw "Baselines module imported, but Invoke-FirewallCorePolicyApplyWithBaselines is not available. Check module exports."
+}Write-Host "[] Applying FirewallCore policy + capturing PRE/POST baselines..." -ForegroundColor Cyan
         $b = Invoke-FirewallCorePolicyApplyWithBaselines -InstallerRoot $InstallerRoot -ProgramDataRoot $ProgramDataRoot -Stamp $InstallerAuditStamp -Mode $ModeNormalized
 
         $preOk  = if ($b.Pre.ManifestOk) { 'true' } else { 'false' }
@@ -423,10 +452,12 @@ Copy-Item -LiteralPath $defenderSource -Destination $defenderLive -Force
 # Execute using the launch contract (hidden, no profile, non-interactive)
 # NOTE: AllSigned requires $defenderLive to be signed too.
 $powershellExe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$arg = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy AllSigned -File "{0}"' -f $defenderLive
+# DEV: allow iteration even if unsigned; LIVE: enforce AllSigned
+$execPol = if ($ModeNormalized -eq 'DEV') { 'Bypass' } else { 'AllSigned' }
+$arg = ('-NoLogo -NoProfile -NonInteractive -ExecutionPolicy {0} -File ""{1}"" -ExitOnComplete' -f $execPol, $defenderLive)
 $proc = Start-Process -FilePath $powershellExe -ArgumentList $arg -Wait -PassThru -WindowStyle Hidden
-if ($proc.ExitCode -ne 0) {
-  throw "Defender integration failed (ExitCode=$($proc.ExitCode)). Script: $defenderLive"
+if ($defEc -ne 0) {
+Write-Warning ("Defender integration failed (ExitCode={0}). Script: {1}" -f $defEc, $defenderLive)
 }
 # TOAST LISTENER (USER LOGON)
 # ============================================================
@@ -549,14 +580,14 @@ catch {
     }
     # --- END FIREWALLCORE TOAST SELFHEAL INFRA ---
 
-    $endMsg = "INSTALL OK | mode=$ModeNormalized | end=$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"
+    $endMsg = "Install | mode=$ModeNormalized | end=$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"
     Write-InstallerAuditLine $endMsg
     Write-InstallerEvent -EventId 1008 -Message $endMsg -EntryType Information
 
 }
 catch {
     $ex = $_.Exception
-    $failMsg = "INSTALL FAIL | mode=$ModeNormalized | error=$($ex.Message)"
+    $failMsg = "Installation Failed | mode=$ModeNormalized | error=$($ex.Message)"
     Write-InstallerAuditLine $failMsg
     Write-InstallerAuditLine ("DETAILS | " + ($_ | Out-String).Trim())
     Write-InstallerEvent -EventId 1901 -Message $failMsg -EntryType Error
@@ -592,3 +623,11 @@ catch {
 # MEUCIQCy0fldCDZIGluJlExFPSkEfXJ1cmPEUYA0SSm817v4pwIgVau0RyKsXnvN
 # S78CH6vtr6L5ZbGO+T/wsSeD+xphdHA=
 # SIG # End signature block
+
+
+
+
+
+
+
+
