@@ -17,7 +17,7 @@ Please report security issues **privately**. Do **not** open a public GitHub Iss
 Use GitHub's security reporting feature (Security → Advisories → "Report a vulnerability") if enabled.
 
 ### Alternate: Email
-Email: **security@YOURDOMAIN.com**  
+Email: FirewallCoreHIPS@outlook.com 
 If you do not have a security mailbox, use a dedicated address you control (not a personal inbox if possible).
 
 Include:
