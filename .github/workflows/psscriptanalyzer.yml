@@ -1,0 +1,62 @@
+name: PSScriptAnalyzer
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze PowerShell
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          $configPath = Join-Path $PWD '.psscriptanalyzer.psd1'
+
+          if (-not (Test-Path $configPath)) {
+              throw "Missing .psscriptanalyzer.psd1 configuration file."
+          }
+
+          $results = Invoke-ScriptAnalyzer `
+              -Path $PWD `
+              -Settings $configPath `
+              -Recurse `
+              -ErrorAction Continue
+
+          if ($results) {
+              $results |
+                Sort-Object RuleName, ScriptName, Line |
+                Format-Table -AutoSize
+
+              $errorCount = ($results | Where-Object Severity -eq 'Error').Count
+
+              if ($errorCount -gt 0) {
+                  throw "PSScriptAnalyzer found $errorCount error(s)."
+              }
+
+              Write-Host "Warnings present but no blocking errors."
+          }
+          else {
+              Write-Host "PSScriptAnalyzer: clean ✅"
+          }
