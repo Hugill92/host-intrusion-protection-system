@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param()
+Set-StrictMode -Off
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -130,4 +131,5 @@ if ($AlsoSignLive) {
   Write-Host 'NOTE: -AlsoSignLive requested, but live signing is intentionally not implemented here.'
   Write-Host '      Keep repo as source of truth; deploy-to-live should copy already-signed artifacts.'
 }
+
 
